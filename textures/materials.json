@@ -1,0 +1,47 @@
+{
+ "brick_4": {
+  "map": "textures/brick_4/map_1k.jpg",
+  "normalMap": "textures/brick_4/normalMap_1k.jpg",
+  "roughnessMap": "textures/brick_4/roughnessMap_1k.jpg"
+ },
+ "concrete_block_wall": {
+  "map": "textures/concrete_block_wall/map_1k.jpg",
+  "normalMap": "textures/concrete_block_wall/normalMap_1k.jpg",
+  "roughnessMap": "textures/concrete_block_wall/roughnessMap_1k.jpg"
+ },
+ "brushed_concrete": {
+  "map": "textures/brushed_concrete/map_1k.jpg",
+  "normalMap": "textures/brushed_concrete/normalMap_1k.jpg",
+  "roughnessMap": "textures/brushed_concrete/roughnessMap_1k.jpg"
+ },
+ "plywood": {
+  "map": "textures/plywood/map_1k.jpg",
+  "normalMap": "textures/plywood/normalMap_1k.jpg",
+  "roughnessMap": "textures/plywood/roughnessMap_1k.jpg"
+ },
+ "bicolour_gravel": {
+  "map": "textures/bicolour_gravel/map_1k.jpg",
+  "normalMap": "textures/bicolour_gravel/normalMap_1k.jpg",
+  "roughnessMap": "textures/bicolour_gravel/roughnessMap_1k.jpg"
+ },
+ "rusty_metal": {
+  "map": "textures/rusty_metal/map_1k.jpg",
+  "normalMap": "textures/rusty_metal/normalMap_1k.jpg",
+  "roughnessMap": "textures/rusty_metal/roughnessMap_1k.jpg"
+ },
+ "rusty_corrugated_iron": {
+  "map": "textures/rusty_corrugated_iron/map_1k.jpg",
+  "normalMap": "textures/rusty_corrugated_iron/normalMap_1k.jpg",
+  "roughnessMap": "textures/rusty_corrugated_iron/roughnessMap_1k.jpg"
+ },
+ "asphalt_04": {
+  "map": "textures/asphalt_04/map_1k.jpg",
+  "normalMap": "textures/asphalt_04/normalMap_1k.jpg",
+  "roughnessMap": "textures/asphalt_04/roughnessMap_1k.jpg"
+ },
+ "sand_01": {
+  "map": "textures/sand_01/map_1k.jpg",
+  "normalMap": "textures/sand_01/normalMap_1k.jpg",
+  "roughnessMap": "textures/sand_01/roughnessMap_1k.jpg"
+ }
+}

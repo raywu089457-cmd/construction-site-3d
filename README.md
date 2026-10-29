@@ -19,7 +19,8 @@ python serve.py --port 4211
 | `index.html` | 9 個 SimReady 圍籬（寫實高模，已減面成網頁可用） |
 | `free.html` | OpenGameArt CC0 工地包 + 挖土機/堆高機 |
 | `scene.html` | 兩邊素材合體的完整工地場景，三種預設視角 |
-| `editor.html` | **組裝編輯器**：自由擺放、鎖點吸附、階段設定、鏡頭運鏡、匯出 MP4 |
+| `editor.html` | **組裝編輯器**（42 種零件）：自由擺放、鎖點吸附、階段設定、鏡頭運鏡、匯出 MP4 |
+| `materials.html` | 9 組建材 PBR 貼圖展示（磚、混凝土、膠合板、碎石、鏽蝕、瀝青、砂） |
 
 ## 編輯器怎麼用
 
@@ -77,7 +78,8 @@ POST /_export/finish?fps=30               → ffmpeg libx264 → MP4
 | **NVIDIA SimReady Assets** (`nvidia/simready-assets`) | **CC BY 4.0**（每個資產內有 `.metadata/LICENSE.txt`） | 圍籬、拒馬、木箱、桶子、手工具… |
 | **OpenGameArt**「3D House Construction Site」by Majadroid | **CC0** | 施工大樓、塔吊、工程車、貨櫃、地面 |
 | **OpenGameArt** excavator / forklift | **CC0** / CC-BY | 挖土機、堆高機 |
-| **Poly Haven** | **CC0** | 水泥袋、混凝土護攔、木梯、鋼管、塑膠箱、鐵桶、石塊 |
+| **Poly Haven** 模型 | **CC0** | 水泥袋、混凝土護欄、木梯/伸縮梯、鋼管×2、塑膠箱×3、木箱×2、木桶、鐵桶、瓦斯桶、石塊、碎石堆 |
+| **Poly Haven** 貼圖 | **CC0** | 9 組 PBR：紅磚、空心磚、清水混凝土、膠合板、碎石、鏽蝕鋼板、鏽蝕浪板、瀝青、砂土 |
 
 CC BY 的素材需要標註作者，使用時請保留上表。
 
@@ -94,6 +96,15 @@ CC BY 的素材需要標註作者，使用時請保留上表。
 3. 網頁端再依 geometry UUID 去重（Blender 會把 prototype 和實體各寫一個 node）
 
 結果：2.9 GB 的圍籬 → 9.3 MB / 5 萬面。
+
+### BIM / Revit 素材說明
+
+`.rfa`（Revit 家族）**沒有免費的轉檔路徑**：ProtoTech / CAD Exchanger / datakit 的
+RFA→glTF 轉換器全部需要先安裝 Revit，convert.guru 是線上付費服務。
+Blender 5.2 也不內建 IFC / DXF 匯入（需要另外裝 Bonsai 或 DXF addon）。
+
+能直接吃進這個專案的格式：**glTF/GLB、FBX、OBJ、USD/USDa、.blend**。
+所以素材都從提供這些格式的來源取得（Poly Haven、OpenGameArt、Quaternius、Kenney）。
 
 ## 已知限制
 

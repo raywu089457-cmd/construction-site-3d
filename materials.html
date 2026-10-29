@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b0d10">
+<title>建材貼圖</title>
+<style>
+  :root{color-scheme:dark}
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0;overflow:hidden}
+  body{background:#0b0d10;color:#e8eaed;font:14px/1.45 system-ui,-apple-system,"Noto Sans TC",sans-serif}
+  canvas{display:block;touch-action:none}
+  header{position:fixed;top:0;left:0;right:0;z-index:10;padding:calc(env(safe-area-inset-top) + 10px) 14px 8px;
+    background:linear-gradient(#0b0d10ee,#0b0d1000);pointer-events:none}
+  h1{margin:0;font-size:15px;font-weight:600}
+  #sub{font-size:11px;color:#8b929c;margin-top:2px}
+  #list{position:fixed;left:0;right:0;bottom:0;z-index:10;padding:8px 10px calc(env(safe-area-inset-bottom) + 8px);
+    background:linear-gradient(#0b0d1000,#0b0d10f2 30%);display:flex;gap:6px;overflow-x:auto}
+  #list::-webkit-scrollbar{display:none}
+  .chip{flex:0 0 auto;background:#14181ecc;border:1px solid #222833;border-radius:8px;padding:6px 10px;
+    font-size:11px;font-weight:600;white-space:nowrap;cursor:pointer}
+  .chip.on{border-color:#1f6feb;background:#16202e}
+</style>
+</head>
+<body>
+<header>
+  <h1>建材貼圖 · PBR</h1>
+  <div id="sub">Poly Haven CC0 · diffuse / normal / roughness · 1k</div>
+</header>
+<div id="list"></div>
+
+<script type="importmap">
+{ "imports": { "three": "./vendor/three.module.js", "three/addons/": "./vendor/addons/" } }
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+const LABEL = {
+  brick_4:'紅磚牆', concrete_block_wall:'空心磚牆', brushed_concrete:'清水混凝土',
+  plywood:'膠合板', bicolour_gravel:'碎石', rusty_metal:'鏽蝕鋼板',
+  rusty_corrugated_iron:'鏽蝕浪板', asphalt_04:'瀝青路面', sand_01:'砂土',
+};
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0b0d10);
+const camera = new THREE.PerspectiveCamera(42, innerWidth/innerHeight, 0.1, 200);
+const renderer = new THREE.WebGLRenderer({ antialias:true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.shadowMap.enabled = true;
+document.body.appendChild(renderer.domElement);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.maxPolarAngle = Math.PI * 0.495;
+controls.minDistance = 2;
+controls.maxDistance = 60;
+
+scene.add(new THREE.HemisphereLight(0xc2d8ee, 0x1b222b, 1.1));
+const sun = new THREE.DirectionalLight(0xfff2dd, 3.2);
+sun.position.set(6, 9, 7);
+sun.castShadow = true;
+sun.shadow.mapSize.set(1024,1024);
+scene.add(sun);
+scene.add(new THREE.DirectionalLight(0x9fb4cf, 0.6).translateX(-8).translateY(4));
+
+const loader = new THREE.TextureLoader();
+const list = document.getElementById('list');
+let manifest = {};
+
+function buildChips() {
+  list.innerHTML = '';
+  Object.keys(manifest).forEach((id, i) => {
+    const el = document.createElement('div');
+    el.className = 'chip' + (i === 0 ? ' on' : '');
+    el.textContent = LABEL[id] || id;
+    el.onclick = () => {
+      document.querySelectorAll('.chip').forEach(c => c.classList.remove('on'));
+      el.classList.add('on');
+      viewTexture(id);
+    };
+    list.appendChild(el);
+  });
+}
+
+let current = null;
+function viewTexture(id) {
+  const m = manifest[id];
+  if (!m) return;
+  const map = loader.load(m.map);
+  [map].forEach(t => { t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(2,2); t.colorSpace = THREE.SRGBColorSpace; });
+  const normalMap = m.normalMap ? loader.load(m.normalMap) : null;
+  const roughnessMap = m.roughnessMap ? loader.load(m.roughnessMap) : null;
+  [normalMap, roughnessMap].forEach(t => { if (t) { t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(2,2); } });
+
+  const mat = new THREE.MeshStandardMaterial({
+    map, normalMap, roughnessMap, metalness: id.includes('metal') || id.includes('iron') ? 0.85 : 0.05,
+    roughness: 1,
+  });
+  if (current) { scene.remove(current); current.geometry.dispose(); }
+  const g = new THREE.BoxGeometry(2.2, 2.2, 2.2, 1, 1, 1);
+  current = new THREE.Mesh(g, mat);
+  current.castShadow = true; current.receiveShadow = true;
+  current.position.y = 1.1;
+  scene.add(current);
+  document.getElementById('sub').textContent =
+    `${LABEL[id] || id} · ${id} · 3 maps · CC0`;
+}
+
+fetch('textures/materials.json').then(r => r.json()).then(m => {
+  manifest = m;
+  buildChips();
+  const first = Object.keys(m)[0];
+  if (first) viewTexture(first);
+  camera.position.set(3.6, 2.8, 4.2);
+  controls.target.set(0, 1.1, 0);
+  controls.update();
+  window.__ready = true;
+});
+
+addEventListener('resize', () => {
+  camera.aspect = innerWidth/innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+renderer.setAnimationLoop(() => { controls.update(); renderer.render(scene, camera); });
+</script>
+</body>
+</html>
