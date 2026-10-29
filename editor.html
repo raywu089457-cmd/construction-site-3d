@@ -6,11 +6,40 @@
 <title>工地組裝編輯器</title>
 <style>
   :root{color-scheme:dark}
+  /* --- top bar: the editor is the hub, everything else hangs off it --- */
+  :root{ --top:40px; --pw:196px; --rw:210px; }
+  #topnav{
+    position:fixed;top:0;left:0;right:0;height:var(--top);z-index:30;
+    display:flex;align-items:center;gap:6px;padding:0 10px;
+    background:#0d1015ee;border-bottom:1px solid #1e242c;backdrop-filter:blur(6px);
+  }
+  #topnav .brand{font-size:12px;font-weight:700;letter-spacing:.02em;margin-right:6px;white-space:nowrap}
+  #topnav .brand i{color:#1f6feb;font-style:normal}
+  #topnav a, #topnav button.nav{
+    font-size:11px;font-weight:600;color:#9aa3ad;text-decoration:none;
+    padding:5px 9px;border-radius:7px;border:1px solid transparent;background:none;cursor:pointer;
+    white-space:nowrap;
+  }
+  #topnav a:hover,#topnav button.nav:hover{color:#e8eaed;background:#171b21;border-color:#222833}
+  #topnav .on{color:#fff;background:#16202e;border-color:#1f6feb}
+  #topnav .spacer{flex:1}
+  #topnav .hint{font-size:10px;color:#5b626b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  @media (max-width: 780px){ #topnav .hint{display:none} }
+
+  /* inline viewer for the reference pages */
+  #modal{position:fixed;inset:0;z-index:40;background:#05070ad9;display:none}
+  #modal.on{display:block}
+  #modal .frame{position:absolute;top:var(--top);left:0;right:0;bottom:0;background:#0b0d10}
+  #modal iframe{width:100%;height:100%;border:0;display:block}
+  #modal .close{position:absolute;top:calc(var(--top) + 8px);right:10px;z-index:2;
+    background:#171b21;border:1px solid #2b3440;color:#e8eaed;border-radius:8px;
+    width:30px;height:30px;font-size:15px;line-height:1;cursor:pointer}
+
   *{box-sizing:border-box}
   html,body{height:100%;margin:0;overflow:hidden}
   body{background:#0b0d10;color:#e8eaed;font:13px/1.4 system-ui,-apple-system,"Noto Sans TC",sans-serif}
   canvas{display:block}
-  #left{position:fixed;top:0;left:0;bottom:0;width:196px;background:#101318ee;border-right:1px solid #1e242c;
+  #left{position:fixed;top:var(--top);left:0;bottom:0;width:var(--pw);background:#101318ee;border-right:1px solid #1e242c;
     display:flex;flex-direction:column;z-index:10}
   #left h2{font-size:11px;letter-spacing:.08em;color:#6b7280;margin:10px 10px 6px;text-transform:uppercase}
   #palette{flex:1;overflow-y:auto;padding:0 8px 8px;display:flex;flex-direction:column;gap:4px}
@@ -19,7 +48,7 @@
   .pitem:hover{border-color:#3a4a5e}
   .pitem.on{border-color:#1f6feb;background:#16202e}
   .pitem .sw{width:6px;height:6px;border-radius:50%;flex:0 0 auto}
-  #right{position:fixed;top:0;right:0;bottom:0;width:210px;background:#101318ee;border-left:1px solid #1e242c;
+  #right{position:fixed;top:var(--top);right:0;bottom:0;width:var(--rw);background:#101318ee;border-left:1px solid #1e242c;
     display:flex;flex-direction:column;z-index:10;padding:10px;gap:8px;overflow-y:auto}
   #right h3{font-size:11px;letter-spacing:.08em;color:#6b7280;margin:2px 0 0;text-transform:uppercase}
   .row{display:flex;gap:5px;flex-wrap:wrap}
@@ -29,15 +58,28 @@
   button.on{border-color:#1f6feb;background:#16202e;color:#fff}
   button.primary{background:#1f6feb;border-color:#1f6feb;color:#fff}
   button.danger{border-color:#7a2e2e;color:#f08c7c}
-  #hud{position:fixed;left:210px;right:224px;bottom:8px;display:flex;gap:8px;align-items:center;
+  #hud{position:fixed;left:calc(var(--pw) + 14px);right:calc(var(--rw) + 14px);bottom:8px;display:flex;gap:8px;align-items:center;
     background:#101318dd;border:1px solid #1e242c;border-radius:9px;padding:7px 10px;z-index:10}
   #hud input[type=range]{flex:1}
-  #tip{position:fixed;left:210px;top:8px;right:224px;color:#6b7280;font-size:11px;z-index:9}
+  #tip{position:fixed;left:calc(var(--pw) + 14px);top:calc(var(--top) + 6px);right:calc(var(--rw) + 14px);color:#6b7280;font-size:11px;z-index:9}
   #stat{font-size:11px;color:#8b929c}
   .k{display:inline-block;background:#222833;border-radius:4px;padding:0 4px;font-family:monospace;color:#c7ccd4}
 </style>
 </head>
 <body>
+<nav id="topnav">
+  <span class="brand">工地 3D <i>工作台</i></span>
+  <button class="nav on" data-page="editor.html">編輯器</button>
+  <button class="nav" data-page="gallery.html">圍籬圖鑑</button>
+  <button class="nav" data-page="free.html">免費素材</button>
+  <button class="nav" data-page="scene.html">工地場景</button>
+  <button class="nav" data-page="materials.html" data-inline="1">建材貼圖</button>
+  <button class="nav" data-page="structure.html" data-inline="1">結構建材</button>
+  <span class="spacer"></span>
+  <span class="hint">拖曳移動 · R 旋轉 · Del 刪除 · 靠近鎖點自動吸附</span>
+</nav>
+<div id="modal"><div class="frame"><iframe id="mframe" referrerpolicy="no-referrer"></iframe></div>
+  <button class="close" id="mclose">×</button></div>
 <div id="left">
   <h2>零件庫</h2>
   <div id="palette"></div>
@@ -93,6 +135,8 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
+const NAV_H = 40;   // height of the hub bar at the top
+
 /* ------------------------------------------------------------------ catalog */
 const CATALOG = [
   { id:'fence_b',   f:'models/fence_b.glb',      label:'網片圍籬 6m', kind:'fence', c:'#8b95a3' },
@@ -146,9 +190,9 @@ renderer.toneMapping = THREE.ACESFilmicToneMapping;
 document.body.appendChild(renderer.domElement);
 renderer.domElement.style.position = 'fixed';
 renderer.domElement.style.left = '196px';
-renderer.domElement.style.top = '0';
-renderer.setSize(innerWidth - 196 - 210, innerHeight);
-camera.aspect = (innerWidth-196-210)/innerHeight;
+renderer.domElement.style.top = NAV_H + 'px';
+renderer.setSize(innerWidth - 196 - 210, innerHeight - NAV_H);
+camera.aspect = (innerWidth-196-210)/(innerHeight-NAV_H);
 camera.updateProjectionMatrix();
 
 const controls = new OrbitControls(camera, renderer.domElement);
@@ -678,10 +722,35 @@ function toast(msg) {
 
 /* --------------------------------------------------------------------- loop */
 addEventListener('resize', () => {
-  const w = innerWidth - 196 - 210, h = innerHeight;
+  const w = innerWidth - 196 - 210, h = innerHeight - NAV_H;
   camera.aspect = w / h; camera.updateProjectionMatrix();
   renderer.setSize(w, h);
 });
+
+/* ------------------------------------------------------------------ hub nav */
+(function () {
+  const modal = document.getElementById('modal');
+  const frame = document.getElementById('mframe');
+  const close = document.getElementById('mclose');
+  document.querySelectorAll('#topnav .nav').forEach(btn => {
+    btn.onclick = () => {
+      const page = btn.dataset.page;
+      if (btn.dataset.inline) {
+        frame.src = page;
+        modal.classList.add('on');
+      } else {
+        location.href = page;   // same tab: the editor keeps its state in memory
+      }
+    };
+  });
+  close.onclick = () => { modal.classList.remove('on'); frame.src = 'about:blank'; };
+  addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && modal.classList.contains('on')) {
+      modal.classList.remove('on'); frame.src = 'about:blank';
+    }
+  });
+})();
+
 window.__dbg = { camera, controls, get parts(){return parts;}, get camKeys(){return camKeys;}, spawn, snapPositions, applyTimeline, play, renderAt, exportMP4, pushCamKey, setStage(s){maxStage=s;buildCamKeys();} };
 renderer.setAnimationLoop(() => {
   if (!busy) { controls.update(); if (outline) outline.update(); renderer.render(scene, camera); }

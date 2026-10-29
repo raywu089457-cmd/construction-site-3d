@@ -2,283 +2,35 @@
 <html lang="zh-Hant">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#0b0d10">
-<title>SimReady 圍籬 ×9</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>工地 3D 工作台</title>
+<meta http-equiv="refresh" content="0; url=editor.html">
 <style>
-  :root { color-scheme: dark; }
-  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-  html, body { height: 100%; margin: 0; overflow: hidden; }
-  body {
-    background: #0b0d10; color: #e8eaed;
-    font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans TC", sans-serif;
-  }
-  canvas { display: block; touch-action: none; }
-  header {
-    position: fixed; top: 0; left: 0; right: 0; z-index: 10;
-    padding: calc(env(safe-area-inset-top) + 10px) 14px 10px;
-    background: linear-gradient(#0b0d10ee, #0b0d1000);
-    pointer-events: none;
-  }
-  h1 { margin: 0; font-size: 15px; font-weight: 600; }
-  #sub { font-size: 11px; color: #8b929c; margin-top: 2px; }
-
-  #panel {
-    position: fixed; left: 0; right: 0; bottom: 0; z-index: 10;
-    padding: 8px 0 calc(env(safe-area-inset-bottom) + 8px);
-    background: linear-gradient(#0b0d1000, #0b0d10f2 30%);
-    display: flex; gap: 6px; overflow-x: auto; scroll-snap-type: x proximity;
-    -webkit-overflow-scrolling: touch;
-    padding-left: 10px; padding-right: 10px;
-  }
-  #panel::-webkit-scrollbar { display: none; }
-  .chip {
-    flex: 0 0 auto; scroll-snap-align: center;
-    display: flex; flex-direction: column; gap: 1px;
-    background: #14181ecc; border: 1px solid #222833; border-radius: 9px;
-    padding: 6px 9px; min-width: 104px; max-width: 150px;
-    cursor: pointer; transition: border-color .15s, background .15s;
-  }
-  .chip.on { border-color: #1f6feb; background: #16202e; }
-  .chip .name { font-size: 11px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .chip .meta { font-size: 10px; color: #8b929c; white-space: nowrap; }
-  .chip .dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; margin-right: 4px; vertical-align: 1px; }
-  #toggle {
-    position: fixed; right: 12px; top: calc(env(safe-area-inset-top) + 10px); z-index: 11;
-    background: #14181ecc; border: 1px solid #222833; color: #c7ccd4;
-    border-radius: 8px; padding: 6px 10px; font-size: 11px; font-weight: 600;
-  }
-  @media (max-height: 560px) {
-    header { padding-top: calc(env(safe-area-inset-top) + 5px); padding-bottom: 3px; }
-    h1 { font-size: 13px; } #sub { display: none; }
-    .chip { padding: 4px 7px; min-width: 92px; }
-    .chip .name { font-size: 10px; } .chip .meta { font-size: 9px; }
-    #panel { padding-bottom: calc(env(safe-area-inset-bottom) + 4px); }
-  }
+  :root{color-scheme:dark}
+  html,body{height:100%;margin:0;background:#0b0d10;color:#e8eaed;
+    font:14px/1.5 system-ui,-apple-system,"Noto Sans TC",sans-serif}
+  .wrap{height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;padding:24px}
+  h1{font-size:18px;margin:0;font-weight:600}
+  p{color:#8b929c;font-size:13px;margin:0;text-align:center;max-width:520px}
+  .links{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px;max-width:560px;width:100%}
+  a{display:block;padding:12px 14px;background:#14181e;border:1px solid #222833;border-radius:10px;
+    color:#e8eaed;text-decoration:none;font-size:13px;font-weight:600;transition:border-color .15s}
+  a:hover{border-color:#1f6feb}
+  a span{display:block;font-size:11px;color:#8b929c;font-weight:400;margin-top:2px}
 </style>
 </head>
 <body>
-<header>
-  <h1>SimReady 圍籬 ×9</h1>
-  <div id="sub">拖曳旋轉 · 雙指縮放 · 點下方卡片跳到那個模型</div>
-</header>
-<button id="toggle">全部</button>
-<div id="panel"></div>
-
-<script type="importmap">
-{ "imports": { "three": "./vendor/three.module.js", "three/addons/": "./vendor/addons/" } }
-</script>
-<script type="module">
-import * as THREE from 'three';
-import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-
-const MODELS = [
-  { file: 'models/metal.glb',       name: '黃色護欄',     note: 'barrier_fence_metal_a02',        color: '#e8b53c' },
-  { file: 'models/metal_a03.glb',   name: '螺旋柱護欄',   note: 'barrier_fence_metal_a03',        color: '#e8b53c' },
-  { file: 'models/gate_safety.glb', name: '網格閘門',     note: 'barrier_gate_safety_a02',        color: '#f0c53c' },
-  { file: 'models/gate_dock.glb',   name: '月台閘門',     note: 'barrier_gate_safetyDock_a02',    color: '#f0c53c' },
-  { file: 'models/orange.glb',      name: '橘色注水圍籬', note: 'barrier_wall_plastic_orange_a03', color: '#ff6a2b' },
-  { file: 'models/barricade.glb',   name: '黃色拒馬',     note: 'environment_barricade_a01',      color: '#f2a33c' },
-  { file: 'models/environment_fence_a01_lite.glb', name: '網片圍籬 A', note: 'environment_fence_a01',   color: '#8b95a3' },
-  { file: 'models/fence_b.glb',     name: '網片圍籬 B',   note: 'environment_fence_b01',          color: '#8b95a3' },
-  { file: 'models/fence_c.glb',     name: '網片圍籬 C',   note: 'environment_fence_c01',          color: '#8b95a3' },
-];
-
-const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x0b0d10);
-scene.fog = new THREE.Fog(0x0b0d10, 26, 62);
-
-const camera = new THREE.PerspectiveCamera(38, innerWidth / innerHeight, 0.05, 300);
-camera.position.set(6.5, 4.4, 12);
-
-const renderer = new THREE.WebGLRenderer({ antialias: true });
-renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
-renderer.setSize(innerWidth, innerHeight);
-renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-renderer.toneMapping = THREE.ACESFilmicToneMapping;
-document.body.appendChild(renderer.domElement);
-
-const controls = new OrbitControls(camera, renderer.domElement);
-controls.enableDamping = true;
-controls.dampingFactor = 0.08;
-controls.minDistance = 1;
-controls.maxDistance = 120;
-controls.maxPolarAngle = Math.PI * 0.495;
-
-scene.add(new THREE.HemisphereLight(0xa9c2dc, 0x1a2028, 1.5));
-const key = new THREE.DirectionalLight(0xffffff, 2.3);
-key.position.set(9, 15, 10);
-key.castShadow = true;
-key.shadow.mapSize.set(2048, 2048);
-key.shadow.bias = -0.0015;
-Object.assign(key.shadow.camera, { left: -22, right: 22, top: 22, bottom: -22, near: 0.5, far: 70 });
-key.shadow.camera.updateProjectionMatrix();
-scene.add(key);
-const fill = new THREE.DirectionalLight(0x9fb4cf, 1.0);
-fill.position.set(-11, 7, -8);
-scene.add(fill);
-
-const ground = new THREE.Mesh(
-  new THREE.PlaneGeometry(160, 160),
-  new THREE.MeshStandardMaterial({ color: 0x171b21, roughness: 0.95 })
-);
-ground.rotation.x = -Math.PI / 2;
-ground.receiveShadow = true;
-scene.add(ground);
-const grid = new THREE.GridHelper(160, 160, 0x2a323d, 0x1e242c);
-grid.material.opacity = 0.5;
-grid.material.transparent = true;
-scene.add(grid);
-
-// ---- panel ----------------------------------------------------------------
-const panel = document.getElementById('panel');
-const toggle = document.getElementById('toggle');
-const chips = [];
-MODELS.forEach((m, i) => {
-  const el = document.createElement('div');
-  el.className = 'chip';
-  el.innerHTML =
-    `<div class="name"><span class="dot" style="background:${m.color}"></span>${m.name}</div>` +
-    `<div class="meta">載入中…</div>`;
-  el.onclick = () => focus(i);
-  panel.appendChild(el);
-  chips.push({ el, meta: el.querySelector('.meta') });
-});
-
-// ---- layout ---------------------------------------------------------------
-const loader = new GLTFLoader();
-const modelsBox = new THREE.Box3();
-const roots = new Array(MODELS.length).fill(null);
-let loaded = 0;
-
-const cols = () => (innerWidth / innerHeight < 1 ? 2 : 3);
-
-function place(root, index) {
-  // Blender's USD->GLB export writes each mesh under two nodes (prototype +
-  // instance), so the same geometry is drawn twice. Hide the repeats.
-  const seen = new Set();
-  let tris = 0;
-  root.traverse((o) => {
-    if (!o.isMesh) return;
-    if (seen.has(o.geometry.uuid)) { o.visible = false; return; }
-    seen.add(o.geometry.uuid);
-    const g = o.geometry;
-    tris += g.index ? g.index.count / 3 : (g.attributes.position?.count || 0) / 3;
-    o.castShadow = true;
-    o.receiveShadow = true;
-  });
-
-  const b = new THREE.Box3().setFromObject(root);
-  const size = new THREE.Vector3(); b.getSize(size);
-  const c = new THREE.Vector3(); b.getCenter(c);
-  const s = size.y > 0.01 ? 2.2 / size.y : 1;
-  root.scale.setScalar(s);
-
-  const b2 = new THREE.Box3().setFromObject(root);
-  const c2 = new THREE.Vector3(); b2.getCenter(c2);
-
-  const nCols = cols();
-  const nRows = Math.ceil(MODELS.length / nCols);
-  const col = index % nCols;
-  const row = Math.floor(index / nCols);
-  const gapX = 3.7, gapZ = 3.9;
-  const x = (col - (nCols - 1) / 2) * gapX;
-  const z = -(row - (nRows - 1) / 2) * gapZ;
-
-  root.position.set(x - c2.x, -b2.min.y, z - c2.z);
-  scene.add(root);
-  modelsBox.expandByObject(root);
-  return { tris: Math.round(tris), size };
-}
-
-function frameAll() {
-  if (modelsBox.isEmpty()) return;
-  const center = modelsBox.getCenter(new THREE.Vector3());
-  center.y = Math.max(center.y, 1.0);
-  const portrait = innerWidth / innerHeight < 1;
-  const dir = (portrait
-    ? new THREE.Vector3(0.30, 0.62, -0.72)
-    : new THREE.Vector3(0.30, 0.60, 0.74)).normalize();
-
-  const mn = modelsBox.min, mx = modelsBox.max;
-  const corners = [];
-  for (const x of [mn.x, mx.x]) for (const y of [mn.y, mx.y]) for (const z of [mn.z, mx.z])
-    corners.push(new THREE.Vector3(x, y, z));
-
-  const cam = camera.clone();
-  cam.aspect = camera.aspect;
-  let lo = 0.5, hi = 400, best = hi;
-  for (let i = 0; i < 24; i++) {
-    const mid = (lo + hi) / 2;
-    cam.position.copy(center).addScaledVector(dir, mid);
-    cam.lookAt(center);
-    cam.updateMatrixWorld(true);
-    cam.updateProjectionMatrix();
-    let ok = true;
-    for (const p of corners) {
-      const v = p.clone().project(cam);
-      if (Math.abs(v.x) > 0.95 || Math.abs(v.y) > 0.90 || v.z > 1) { ok = false; break; }
-    }
-    if (ok) { best = mid; hi = mid; } else { lo = mid; }
-  }
-  camera.position.copy(center).addScaledVector(dir, best);
-  controls.target.copy(center);
-  controls.update();
-  chips.forEach((c) => c.el.classList.remove('on'));
-}
-
-// fly the camera to one model
-function focus(i) {
-  const root = roots[i];
-  if (!root) return;
-  const b = new THREE.Box3().setFromObject(root);
-  const c = b.getCenter(new THREE.Vector3());
-  const size = b.getSize(new THREE.Vector3());
-  const dist = Math.max(size.x, size.y, size.z) * 2.1 + 2.2;
-  const dir = new THREE.Vector3(0.45, 0.42, 0.79).normalize();
-  controls.target.copy(c);
-  camera.position.copy(c).addScaledVector(dir, dist);
-  controls.update();
-  chips.forEach((ch, j) => ch.el.classList.toggle('on', j === i));
-  chips[i].el.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
-}
-
-toggle.onclick = frameAll;
-
-// ---- load -----------------------------------------------------------------
-MODELS.forEach((spec, i) => {
-  loader.load(
-    spec.file,
-    (gltf) => {
-      const info = place(gltf.scene, i);
-      roots[i] = gltf.scene;
-      chips[i].meta.textContent = `${info.tris.toLocaleString()} 三角形`;
-      loaded++;
-      if (loaded === MODELS.length) {
-        // first impression: a clear close-up, not a distant field of 9
-        focus(0);
-        toggle.style.display = 'block';
-      }
-    },
-    (ev) => {
-      if (ev.total) chips[i].meta.textContent = `${(ev.loaded / 1e6).toFixed(1)}/${(ev.total / 1e6).toFixed(1)} MB`;
-    },
-    (err) => { chips[i].meta.textContent = '失敗'; console.error(spec.file, err); }
-  );
-});
-
-addEventListener('resize', () => {
-  camera.aspect = innerWidth / innerHeight;
-  camera.updateProjectionMatrix();
-  renderer.setSize(innerWidth, innerHeight);
-});
-
-renderer.setAnimationLoop(() => {
-  controls.update();
-  renderer.render(scene, camera);
-});
-</script>
+<div class="wrap">
+  <h1>工地 3D 工作台</h1>
+  <p>正在開啟編輯器…（沒有自動跳轉的話，點下面任何一個）</p>
+  <div class="links">
+    <a href="editor.html">組裝編輯器<span>擺放零件 · 鎖點 · 階段 · 匯出 MP4</span></a>
+    <a href="scene.html">工地場景<span>合體場景 · 三種視角</span></a>
+    <a href="gallery.html">圍籬圖鑑<span>9 個 SimReady 圍籬</span></a>
+    <a href="free.html">免費素材<span>塔吊 · 工程車 · 挖土機</span></a>
+    <a href="materials.html">建材貼圖<span>9 組 PBR 材質</span></a>
+    <a href="structure.html">結構建材<span>模板 · 鋼筋 · 混凝土 · 鷹架</span></a>
+  </div>
+</div>
 </body>
 </html>
