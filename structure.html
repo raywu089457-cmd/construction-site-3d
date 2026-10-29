@@ -10,7 +10,7 @@
   html,body{height:100%;margin:0;overflow:hidden}
   body{background:#0b0d10;color:#e8eaed;font:13px/1.45 system-ui,-apple-system,"Noto Sans TC",sans-serif}
   canvas{display:block}
-  #panel{position:fixed;top:0;left:0;bottom:0;width:224px;background:#101318ee;border-right:1px solid #1e242c;
+  #panel{position:fixed;top:0;left:0;bottom:0;width:230px;background:#101318ee;border-right:1px solid #1e242c;
     z-index:10;display:flex;flex-direction:column;overflow-y:auto}
   h2{font-size:11px;letter-spacing:.08em;color:#6b7280;margin:10px 10px 6px;text-transform:uppercase}
   .tabs{display:flex;flex-wrap:wrap;gap:4px;padding:0 8px}
@@ -26,11 +26,11 @@
   .p .row button{flex:1 1 28%;background:#171b21;border:1px solid #222833;color:#c7ccd4;border-radius:6px;
     padding:5px 2px;font-size:10px;cursor:pointer}
   .p .row button.on{border-color:#1f6feb;background:#16202e;color:#fff}
-  #info{position:fixed;left:224px;right:0;top:0;padding:10px 14px;z-index:9;pointer-events:none;
+  #info{position:fixed;left:230px;right:0;top:0;padding:10px 14px;z-index:9;pointer-events:none;
     font-size:11px;color:#8b929c;background:linear-gradient(#0b0d10dd,#0b0d1000)}
   #info b{color:#e8eaed;font-size:13px}
-  #spec{margin-top:3px;font-size:10.5px;color:#6f7a86;line-height:1.5}
-  #stat{position:fixed;left:224px;bottom:10px;right:0;text-align:center;font-size:11px;color:#6b7280;z-index:9}
+  #spec{margin-top:3px;font-size:10.5px;color:#6f7a86;line-height:1.55}
+  #stat{position:fixed;left:230px;bottom:10px;right:0;text-align:center;font-size:11px;color:#6b7280;z-index:9}
   #hubback{position:fixed;left:10px;bottom:calc(env(safe-area-inset-bottom) + 10px);z-index:50;
     background:#14181ecc;border:1px solid #2b3440;color:#c7ccd4;border-radius:8px;padding:7px 11px;
     font:600 11px/1 system-ui,-apple-system,"Noto Sans TC",sans-serif;text-decoration:none}
@@ -55,67 +55,68 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
-/* 台灣常用規格（CNS / 營造安全衛生設施標準）
-   模板   4×8 呎膠合板 122×244 cm、18 mm 厚；柳安角材 1.5"×1.5"（約 38 mm）
-   支柱   可調鋼管支柱（俗稱烏龜）φ48.6×2.3 mm，常用 2.1–3.6 m
-   鋼筋   竹節鋼筋 CNS 560：SD280 / SD420；#3(10) #4(13) #5(16) #6(19) #7(22) #8(25)
-   混凝土 210 / 280 / 350 kgf/cm²
-   施工架 框式施工架（門型框）1.83 m 寬 × 1.90 m 高，φ48.6 鋼管
-          護欄上欄杆 90 cm、中欄杆 45 cm、踢腳板 18 cm、壁連座縱 5.5 m 橫 4.5 m  */
-const SPEC_TW = {
-  panelW: 1.219, panelH: 2.438, panelT: 0.018,   // 4×8 呎膠合板
-  batten: 0.038,                                  // 柳安角材 1.5"×1.5"
-  propDia: 0.0486,                                // 可調鋼管支柱 φ48.6
-  frameW: 1.83, frameH: 1.90,                     // 門型框
-  toeH: 0.18, railTop: 0.90, railMid: 0.45,
+/* =========================================================================
+   台灣規範依據（有查證，附參考圖）
+   營造安全衛生設施標準 §39 框式施工架、§23 模板支撐
+   CNS 5644 A2078 可調鋼管支柱
+   CNS 560 A2006 竹節鋼筋 SD280 / SD420
+   CNS 3090 預拌混凝土 210/280/350 kgf/cm²
+   模板：4×8 呎膠合板 122×244×18 mm、柳安角材 1.5"、雙鋼管柱箍
+   ========================================================================= */
+const TW = {
+  ply: 0.018, panelW: 1.219, panelH: 2.438,
+  batten: 0.038,                 // 柳安角材 1.5"
+  joistA: 0.09, joistB: 0.038,   // 大樑母索 90×90 / 小樑母索 38×90
+  tube: 0.0486, railTube: 0.033, // 施工架 φ48.6 / 護欄 φ33
+  frameW: 1.83, frameH: 1.90,    // 門型架
+  toe: 0.18, railTop: 0.90, railMid: 0.45,
 };
-
 const REBAR = { '#3':10, '#4':13, '#5':16, '#6':19, '#7':22, '#8':25 };
 
-/* ------------------------------------------------------------------ renderer */
+/* ------------------------------------------------------------------ scene */
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x0b0d10);
-const camera = new THREE.PerspectiveCamera(42, (innerWidth-224)/innerHeight, 0.05, 300);
+const camera = new THREE.PerspectiveCamera(42, (innerWidth-230)/innerHeight, 0.05, 400);
 const renderer = new THREE.WebGLRenderer({ antialias:true });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
-renderer.setSize(innerWidth-224, innerHeight);
+renderer.setSize(innerWidth-230, innerHeight);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 document.body.appendChild(renderer.domElement);
 renderer.domElement.style.position='fixed';
-renderer.domElement.style.left='224px';
+renderer.domElement.style.left='230px';
 
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
 controls.maxPolarAngle = Math.PI*0.495;
 controls.minDistance = 0.6;
-controls.maxDistance = 70;
+controls.maxDistance = 80;
 controls.target.set(0, 1.6, 0);
-camera.position.set(4.4, 3.4, 5.6);
+camera.position.set(4.6, 3.6, 5.8);
 
-scene.add(new THREE.HemisphereLight(0xc8ddf2, 0x1b222b, 1.15));
-const sun = new THREE.DirectionalLight(0xfff3e2, 2.9);
-sun.position.set(6, 10, 7);
+scene.add(new THREE.HemisphereLight(0xc8ddf2, 0x1b222b, 1.2));
+const sun = new THREE.DirectionalLight(0xfff3e2, 2.8);
+sun.position.set(7, 11, 7);
 sun.castShadow = true;
 sun.shadow.mapSize.set(2048,2048);
 sun.shadow.bias = -0.0012;
-Object.assign(sun.shadow.camera, { left:-14, right:14, top:14, bottom:-14, near:0.5, far:44 });
+Object.assign(sun.shadow.camera, { left:-16, right:16, top:16, bottom:-16, near:0.5, far:50 });
 sun.shadow.camera.updateProjectionMatrix();
 scene.add(sun);
-scene.add(new THREE.DirectionalLight(0x9fb4cf, 0.5).translateX(-8).translateY(5));
+scene.add(new THREE.DirectionalLight(0x9fb4cf, 0.5).translateX(-9).translateY(5));
 
-const ground = new THREE.Mesh(new THREE.PlaneGeometry(140,140),
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(160,160),
   new THREE.MeshStandardMaterial({ color:0x343b45, roughness:0.97 }));
 ground.rotation.x = -Math.PI/2; ground.receiveShadow = true; scene.add(ground);
-const grid = new THREE.GridHelper(140, 140, 0x46525f, 0x2a323b);
-grid.position.y = 0.002; grid.material.opacity = 0.45; grid.material.transparent = true; scene.add(grid);
+const grid = new THREE.GridHelper(160, 160, 0x46525f, 0x2a323b);
+grid.position.y = 0.002; grid.material.opacity = 0.42; grid.material.transparent = true; scene.add(grid);
 
-/* ----------------------------------------------------------------- materials */
+/* -------------------------------------------------------------- materials */
 const tex = new THREE.TextureLoader();
 const cache = {};
 function pbr(name, repeat=[2,2], opts={}) {
-  const key = name + repeat.join(',');
+  const key = name + repeat.join(',') + JSON.stringify(opts);
   if (cache[key]) return cache[key];
   const base = `textures/${name}/`;
   const load = (f, srgb) => {
@@ -135,25 +136,36 @@ function pbr(name, repeat=[2,2], opts={}) {
   cache[key] = m;
   return m;
 }
+function cacheMetal(color, metalness, roughness) {
+  const k = 'metal' + color + metalness + roughness;
+  if (cache[k]) return cache[k];
+  const m = new THREE.MeshStandardMaterial({ color, metalness, roughness });
+  cache[k] = m;
+  return m;
+}
+
 const MAT = {
-  concrete: (grade) => pbr('brushed_concrete', [1.4,1.4], { color: grade >= 350 ? 0xb9bec4 : 0xc6c6c1 }),
-  plywood:  () => pbr('plywood', [2.5,2.5]),
-  timber:   () => pbr('plywood', [3,1], { color: 0xcbb089 }),
-  steel:    () => pbr('rusty_metal', [5,5], { metalness: 0.8, color: 0xb8bcc0 }),
-  rebar:    () => pbr('rusty_metal', [4,4], { metalness: 0.85, color: 0x9a6a4a }),
+  concrete: (g) => pbr('brushed_concrete', [1.4,1.4], { color: g >= 350 ? 0xb6bcc2 : 0xc6c7c2 }),
+  ply:   () => pbr('plywood', [2.2,2.2]),
+  timber:() => pbr('plywood', [3,1], { color: 0xb99a72 }),
+  // 施工架鋼管是鍍鋅的（銀灰），不是生鏽的——用純 PBR 金屬，不貼鏽蝕貼圖
+  steel: () => cacheMetal(0xc2c8ce, 0.92, 0.34),
+  galv:  () => cacheMetal(0xd2d8de, 0.88, 0.30),
+  deck:  () => cacheMetal(0xa9b0b7, 0.90, 0.42),
+  rebar: () => pbr('rusty_metal', [4,4], { metalness: 0.85, color: 0x9c6f52 }),
 };
 
-/* ------------------------------------------------------------------ geometry */
-function box(w,h,d, x,y,z) { const g=new THREE.BoxGeometry(w,h,d); g.translate(x,y,z); return g; }
-function cyl(r,h, x,y,z, axis='y') {
-  const g = new THREE.CylinderGeometry(r,r,h, 10, 1, false);
+/* --------------------------------------------------------------- geometry */
+const box = (w,h,d,x,y,z) => { const g=new THREE.BoxGeometry(w,h,d); g.translate(x,y,z); return g; };
+function tube(r,len,x,y,z, axis='y') {
+  const g = new THREE.CylinderGeometry(r,r,len, 10, 1, false);
   if (axis==='x') g.rotateZ(Math.PI/2);
   if (axis==='z') g.rotateX(Math.PI/2);
   g.translate(x,y,z);
   return g;
 }
 
-/* ---- 1. 混凝土 ----------------------------------------------------------- */
+/* ---- 1. 混凝土 ---------------------------------------------------------- */
 function buildConcrete(P) {
   const g = [];
   if (P.form === '柱') g.push(box(P.a, P.h, P.b, 0, P.h/2, 0));
@@ -163,311 +175,413 @@ function buildConcrete(P) {
   return [{ geo: mergeGeometries(g), mat: MAT.concrete(P.grade) }];
 }
 
-/* ---- 2. 模板（4×8 呎膠合板 + 柳安角材 + 柱箍鐵） ------------------------- */
-function buildFormwork(P) {
-  const { panelT, batten } = SPEC_TW;
-  const gap = P.gap;
+/* ---- 2. 柱模板：4×8 膠合板 + 柳安角材 + 雙鋼管柱箍 ---------------------- */
+/* 參考：柱模四面由膠合板包覆，外侧立角材，横向以「雙鋼管 + 扣件」夾緊，
+   每 45–50 cm 一道。板縫水平（244 cm 一道）。                                */
+function buildColumnForm(P) {
+  const { ply, batten, tube: R } = TW;
+  const a = P.a, b = P.b, h = P.h, gap = P.gap;
   const out = [];
-  const ply = MAT.plywood();
-  const timber = MAT.timber();
-  const steel = MAT.steel();
 
-  const w = P.a + gap*2, d = P.b + gap*2, h = P.h;
-  const plyGeos = [];
-  // 四面膠合板（每 122 cm 一道接縫，用細縫模擬）
-  const panelPer = Math.max(1, Math.round(h / SPEC_TW.panelH));
-  for (const [sx, sz, sw, sd] of [
-    [ (w+panelT)/2, 0, panelT, d+panelT*2 ],
-    [-(w+panelT)/2, 0, panelT, d+panelT*2 ],
-    [ 0,  (d+panelT)/2, w, panelT ],
-    [ 0, -(d+panelT)/2, w, panelT ],
-  ]) {
-    if (sw < sd) {
-      const seg = h / panelPer;
-      for (let i = 0; i < panelPer; i++)
-        plyGeos.push(box(sw, seg - 0.006, sd, sx, seg*(i+0.5), sz));
-    } else {
-      const seg = h / panelPer;
-      for (let i = 0; i < panelPer; i++)
-        plyGeos.push(box(sw, seg - 0.006, sd, sx, seg*(i+0.5), sz));
+  const pw = a + gap*2, pd = b + gap*2;      // 模板內淨尺寸
+  const plyG = [];
+  const rows = Math.max(1, Math.ceil(h / TW.panelH));
+  const segH = h / rows;
+  for (let r = 0; r < rows; r++) {
+    const y = segH*(r+0.5);
+    plyG.push(box(ply, segH - 0.004, pd + ply*2,  (pw+ply)/2, y, 0));
+    plyG.push(box(ply, segH - 0.004, pd + ply*2, -(pw+ply)/2, y, 0));
+    plyG.push(box(pw, segH - 0.004, ply, 0, y,  (pd+ply)/2));
+    plyG.push(box(pw, segH - 0.004, ply, 0, y, -(pd+ply)/2));
+  }
+  out.push({ geo: mergeGeometries(plyG), mat: MAT.ply() });
+
+  // 垂直角材（四面，每 30 cm 一支，貼在模板外側）
+  const tw = [];
+  const faceX = (pw/2 + ply + batten/2);
+  const faceZ = (pd/2 + ply + batten/2);
+  for (const sx of [-1, 1]) {
+    for (let z = -pd/2; z <= pd/2 + 1e-6; z += 0.30)
+      tw.push(box(batten, h, batten, sx*faceX, h/2, z));
+  }
+  for (const sz of [-1, 1]) {
+    for (let x = -pw/2; x <= pw/2 + 1e-6; x += 0.30)
+      tw.push(box(batten, h, batten, x, h/2, sz*faceZ));
+  }
+  out.push({ geo: mergeGeometries(tw), mat: MAT.timber() });
+
+  // 雙鋼管柱箍：每 50 cm 一道，四面各兩根鋼管 + 四角扣件
+  const sg = [];
+  const ringX = faceX + batten/2 + R;
+  const ringZ = faceZ + batten/2 + R;
+  for (let y = P.clampY; y < h; y += P.clamp) {
+    for (const dy of [-R*0.75, R*0.75]) {
+      const yy = y + dy;
+      sg.push(tube(R, ringZ*2, 0, yy,  ringX, 'z'));   // +X 面，兩端止於角件
+      sg.push(tube(R, ringZ*2, 0, yy, -ringX, 'z'));   // -X 面
+      sg.push(tube(R, ringX*2,  ringZ, yy, 0, 'x'));   // +Z 面
+      sg.push(tube(R, ringX*2, -ringZ, yy, 0, 'x'));   // -Z 面
     }
+    // 四角扣件
+    for (const sx of [-1, 1]) for (const sz of [-1, 1])
+      sg.push(box(0.055, 0.055, 0.055, sx*ringX, y, sz*ringZ));
   }
-  out.push({ geo: mergeGeometries(plyGeos), mat: ply });
-
-  // 柳安角材：垂直角材每 30 cm 一支 + 水平角材每 45 cm 一道
-  const timberGeos = [];
-  const vStep = 0.30;
-  for (const side of [-1, 1]) {
-    const x = side * (w/2 + panelT + batten/2);
-    for (let z = -d/2 + vStep/2; z < d/2; z += vStep)
-      timberGeos.push(box(batten, h, batten, x, h/2, z));
-  }
-  for (const side of [-1, 1]) {
-    const z = side * (d/2 + panelT + batten/2);
-    for (let x = -w/2 + vStep/2; x < w/2; x += vStep)
-      timberGeos.push(box(batten, h, batten, x, h/2, z));
-  }
-  const hStep = 0.45;
-  for (let y = hStep; y < h; y += hStep) {
-    for (const side of [-1, 1]) {
-      timberGeos.push(box(batten, batten, d + panelT*2 + batten*2, side*(w/2 + panelT + batten/2), y, 0));
-      timberGeos.push(box(w + panelT*2 + batten*2, batten, batten, 0, y, side*(d/2 + panelT + batten/2)));
-    }
-  }
-  out.push({ geo: mergeGeometries(timberGeos), mat: timber });
-
-  // 柱箍鐵（角鐵箍）每 45 cm 一道 + 對拉螺栓
-  const clampGeos = [];
-  const clampStep = 0.45;
-  const cw = w + panelT*2 + batten*2 + 0.02;
-  const cd = d + panelT*2 + batten*2 + 0.02;
-  for (let y = clampStep*0.6; y < h; y += clampStep) {
-    clampGeos.push(box(cw + 0.05, 0.05, 0.05, 0, y,  cd/2));
-    clampGeos.push(box(cw + 0.05, 0.05, 0.05, 0, y, -cd/2));
-    clampGeos.push(box(0.05, 0.05, cd,  cw/2, y, 0));
-    clampGeos.push(box(0.05, 0.05, cd, -cw/2, y, 0));
-    clampGeos.push(cyl(0.011, cw + 0.14, 0, y, 0, 'x'));
-    clampGeos.push(cyl(0.03, 0.024, (cw/2+0.06), y, 0, 'x'));
-    clampGeos.push(cyl(0.03, 0.024, -(cw/2+0.06), y, 0, 'x'));
-  }
-  out.push({ geo: mergeGeometries(clampGeos), mat: steel });
+  out.push({ geo: mergeGeometries(sg), mat: MAT.steel() });
   return out;
 }
 
-/* ---- 3. 鋼筋（竹節鋼筋 CNS 560） ----------------------------------------- */
+/* ---- 3. 樑模板：底模 + 側模 + 樑箍 + 樑底支柱 --------------------------- */
+function buildBeamForm(P) {
+  const { ply, batten, tube: R } = TW;
+  const L = P.L, bw = P.bw, bh = P.bh, slabT = P.slabT;
+  const out = [];
+  const y0 = 0;                       // 樑底
+  const g = [];
+  // 底模
+  g.push(box(L, ply, bw + ply*2, 0, y0 + ply/2, 0));
+  // 側模（高度 = 樑深 - 版厚）
+  const sideH = bh - slabT;
+  for (const sz of [-1, 1])
+    g.push(box(L, sideH, ply, 0, y0 + sideH/2, sz*(bw/2 + ply/2)));
+  out.push({ geo: mergeGeometries(g), mat: MAT.ply() });
+
+  // 樑底角材（沿樑向）+ 側模角材（垂直每 30 cm）
+  const tw = [];
+  for (const sz of [-1, 1]) {
+    tw.push(box(L, batten, batten, 0, y0 - batten/2, sz*(bw/2 + ply)));
+    for (let x = -L/2; x <= L/2; x += 0.30)
+      tw.push(box(batten, sideH, batten, x, y0 + sideH/2, sz*(bw/2 + ply + batten/2)));
+  }
+  out.push({ geo: mergeGeometries(tw), mat: MAT.timber() });
+
+  // 樑箍（雙鋼管 + 對拉螺栓）每 45 cm
+  const sg = [];
+  const spanX = bw/2 + ply + batten + R;
+  for (let x = -L/2 + 0.25; x <= L/2; x += P.clamp) {
+    for (const dy of [-0.03, 0.03]) {
+      const yy = y0 + sideH*0.6 + dy;
+      sg.push(tube(R, spanX*2, x, yy, 0, 'z'));      // 穿過樑腹
+    }
+    sg.push(tube(0.008, spanX*2 + 0.08, x, y0 + sideH*0.45, 0, 'z'));
+  }
+  out.push({ geo: mergeGeometries(sg), mat: MAT.steel() });
+
+  // 樑底支柱（可調鋼管支柱）兩側
+  const pr = [];
+  for (let x = -L/2 + 0.5; x <= L/2; x += P.prop) {
+    for (const sz of [-1, 1]) {
+      const zz = sz * (bw/2 + ply + batten + 0.06);
+      pr.push(tube(TW.tube/2, y0 - batten, x, (y0 - batten)/2, zz));
+      pr.push(box(0.12, 0.01, 0.12, x, 0.005, zz));
+      pr.push(box(0.10, 0.008, 0.05, x, y0 - batten, zz));
+    }
+  }
+  out.push({ geo: mergeGeometries(pr), mat: MAT.steel() });
+  return out;
+}
+
+/* ---- 4. 鋼筋（CNS 560） -------------------------------------------------- */
 function buildRebar(P) {
-  const mat = MAT.rebar();
   const r = REBAR[P.bar] / 1000 / 2;
+  const rs = REBAR['#3'] / 1000 / 2;
   const cover = P.cover;
   const geos = [];
 
   if (P.form === '柱') {
     const sx = P.a - cover*2, sz = P.b - cover*2, h = P.h;
-    // 主筋
-    for (const x of [-sx/2, sx/2]) for (const z of [-sz/2, sz/2])
-      geos.push(cyl(r, h, x, h/2, z));
-    // 箍筋 #3 @ 間距
-    const rs = REBAR['#3'] / 1000 / 2;
-    for (let y = P.space; y < h; y += P.space) {
+    // 主筋 + 箍筋（135° 彎鉤用短段表示）
+    for (const x of [-sx/2, sx/2]) for (const z of [-sz/2, sz/2]) geos.push(tube(r, h, x, h/2, z));
+    for (let y = P.space; y < h - 0.05; y += P.space) {
       geos.push(box(sx + rs*2, rs*2, rs*2, 0, y,  sz/2));
       geos.push(box(sx + rs*2, rs*2, rs*2, 0, y, -sz/2));
       geos.push(box(rs*2, rs*2, sz,  sx/2, y, 0));
       geos.push(box(rs*2, rs*2, sz, -sx/2, y, 0));
+      // 彎鉤
+      geos.push(tube(rs, 6*rs, sx/2 - rs, y + 3*rs, sz/2, 'y'));
     }
+    // 搭接段（上下各留筋）
+    geos.push(tube(r, 0.5, -sx/2, h + 0.25, sz/2));
+    geos.push(tube(r, 0.5,  sx/2, h + 0.25, sz/2));
   } else {
-    const L = P.L, W = P.W, t = P.t, rs = r;
+    const L = P.L, W = P.W, t = P.t;
     const sx = L - cover*2, sz = W - cover*2;
     for (const y of [cover, t - cover]) {
-      for (let z = -sz/2; z <= sz/2 + 1e-6; z += P.space) geos.push(cyl(rs, sx, 0, y, z, 'x'));
-      for (let x = -sx/2; x <= sx/2 + 1e-6; x += P.space) geos.push(cyl(rs, sz, x, y, 0, 'z'));
+      for (let z = -sz/2; z <= sz/2 + 1e-6; z += P.space) geos.push(tube(r, sx, 0, y, z, 'x'));
+      for (let x = -sx/2; x <= sx/2 + 1e-6; x += P.space) geos.push(tube(r, sz, x, y, 0, 'z'));
     }
+    // 撐鐵（椅仔鐵）每 1 m 一支，撐住上層鋼筋
+    for (let x = -sx/2 + 0.5; x < sx/2; x += 1.0)
+      for (let z = -sz/2 + 0.5; z < sz/2; z += 1.0)
+        geos.push(box(0.06, t - cover*2, 0.012, x, t/2, z));
   }
-  return [{ geo: mergeGeometries(geos), mat }];
+  return [{ geo: mergeGeometries(geos), mat: MAT.rebar() }];
 }
 
-/* ---- 4. 可調鋼管支柱（模板支撐，俗稱烏龜） ------------------------------- */
+/* ---- 5. 模板支撐：可調鋼管支柱 + 母索 + 水平繫條 + 交叉斜撐 ------------- */
+/* 參考 營造安全衛生設施標準 §23：支柱高度 > 3.5 m 時每 2 m 內設縱橫水平繫條；
+   最上層及每隔 5 層以內設側面水平繫條；母索分大樑母索、小樑母索。          */
 function buildProps(P) {
-  const out = [];
-  const steel = MAT.steel();
-  const g = [];
-  const { propDia } = SPEC_TW;
-  const H = P.h;
-  const sx = P.spanX, sz = P.spanZ;
-  for (let x = -sx/2; x <= sx/2 + 1e-6; x += P.space)
-    for (let z = -sz/2; z <= sz/2 + 1e-6; z += P.space) {
-      g.push(cyl(propDia/2, H, x, H/2, z));
-      g.push(box(0.14, 0.012, 0.14, x, 0.006, z));            // 底板
-      g.push(box(0.16, 0.008, 0.05, x, H, z));                // U 型托座
-      g.push(box(0.05, 0.008, 0.16, x, H, z));
-      g.push(cyl(0.03, 0.06, x, H*0.45, z));                   // 調整螺紋套
+  const { tube: R, joistA, joistB } = TW;
+  const H = P.h, sx = P.spanX, sz = P.spanZ, sp = P.space;
+  const steel = [], wood = [], deck = [];
+
+  const xs = [], zs = [];
+  for (let x = -sx/2; x <= sx/2 + 1e-6; x += sp) xs.push(x);
+  for (let z = -sz/2; z <= sz/2 + 1e-6; z += sp) zs.push(z);
+
+  // 支柱本體
+  const pg = [];
+  for (const x of xs) for (const z of zs) {
+    pg.push(tube(R/2, H, x, H/2, z));
+    pg.push(box(0.14, 0.012, 0.14, x, 0.006, z));                 // 底板
+    pg.push(tube(R*0.62, 0.10, x, 0.35, z));                     // 調整螺帽
+    pg.push(box(0.10, 0.008, 0.05, x, H, z));                    // U 型托座
+    pg.push(box(0.05, 0.008, 0.10, x, H, z));
+  }
+  steel.push(...pg);
+
+  // 水平繫條：每 2 m 一道，縱橫雙向
+  const tie = [];
+  for (let y = 2.0; y < H - 0.2; y += 2.0) {
+    for (const z of zs) tie.push(tube(R/2*0.95, sx, 0, y, z, 'x'));
+    for (const x of xs) tie.push(tube(R/2*0.95, sz, x, y, 0, 'z'));
+  }
+  // 交叉斜撐：四側面 X 型，每 2 m 高
+  for (let y = 0; y < H - 0.2; y += 2.0) {
+    const h2 = Math.min(2.0, H - y);
+    const lenX = Math.hypot(sx, h2), lenZ = Math.hypot(sz, h2);
+    const axX = Math.atan2(h2, sx), axZ = Math.atan2(h2, sz);
+    for (const z of [zs[0], zs[zs.length-1]]) {
+      for (const s of [1,-1]) {
+        const g = new THREE.CylinderGeometry(R*0.4, R*0.4, lenX, 8);
+        g.rotateZ(Math.PI/2 - axX*s); g.translate(0, y + h2/2, z); tie.push(g);
+      }
     }
-  out.push({ geo: mergeGeometries(g), mat: steel });
-  // 上方木角材（大引／小引）
-  const timber = MAT.timber();
-  const tg = [];
-  for (let z = -sz/2; z <= sz/2 + 1e-6; z += P.space)
-    tg.push(box(sx + 0.1, 0.09, 0.09, 0, H + 0.05, z));
-  out.push({ geo: mergeGeometries(tg), mat: timber });
-  return out;
-}
-
-/* ---- 5. 框式施工架（門型框，營造安全衛生設施標準） ---------------------- */
-function buildScaffold(P) {
-  const out = [];
-  const steel = MAT.steel();
-  const plank = MAT.plywood();
-  const { frameW, frameH, toeH, railTop, railMid, propDia } = SPEC_TW;
-  const r = propDia / 2;
-  const levels = P.levels, bays = P.bays, depth = P.rows * 0.75;  // 排距常 0.75 m
-
-  const g = [];
-  const H = frameH * levels;
-  const W = frameW * bays;
-
-  // 門型框：每跨一榀，兩根立桿 + 上下橫桿 + 框內斜撐
-  for (let i = 0; i <= bays; i++) {
-    const x = i * frameW;
-    for (let l = 0; l < levels; l++) {
-      const y0 = l * frameH;
-      for (const z of [0, depth]) {
-        g.push(cyl(r, frameH, x, y0 + frameH/2, z));            // 立桿
+    for (const x of [xs[0], xs[xs.length-1]]) {
+      for (const s of [1,-1]) {
+        const g = new THREE.CylinderGeometry(R*0.4, R*0.4, lenZ, 8);
+        g.rotateX(Math.PI/2 - axZ*s); g.translate(x, y + h2/2, 0); tie.push(g);
       }
-      for (const yy of [y0 + 0.15, y0 + frameH - 0.15]) {
-        g.push(cyl(r*0.9, depth, x, yy, depth/2, 'z'));         // 上下橫桿
-      }
-      // 框內交叉斜撐
-      const len = Math.hypot(depth, frameH - 0.3);
-      const ang = Math.atan2(frameH - 0.3, depth);
-      for (const s of [1, -1]) {
-        const gg = new THREE.CylinderGeometry(r*0.7, r*0.7, len, 8);
-        gg.rotateX(Math.PI/2 - ang * s);
-        gg.translate(x, y0 + frameH/2, depth/2);
-        g.push(gg);
-      }
-      g.push(box(0.12, 0.01, 0.12, x, y0 + 0.005, 0));          // 底座
-      g.push(box(0.12, 0.01, 0.12, x, y0 + 0.005, depth));
     }
   }
-  // 交叉拉桿（跨與跨之間）
-  for (let i = 0; i < bays; i++) {
-    for (let l = 0; l < levels; l++) {
-      const y0 = l*frameH, y1 = (l+1)*frameH;
-      const len = Math.hypot(frameW, frameH);
-      const ang = Math.atan2(frameH, frameW);
-      for (const z of [0, depth]) {
-        for (const s of [1, -1]) {
-          const gg = new THREE.CylinderGeometry(r*0.75, r*0.75, len, 8);
-          gg.rotateZ(Math.PI/2 - ang*s);
-          gg.translate((i+0.5)*frameW, (y0+y1)/2, z);
-          g.push(gg);
+  steel.push(...tie);
+
+  // 大樑母索（沿 X，每條支柱線一支）+ 小樑母索（沿 Z，30 cm 一支）
+  const wg = [];
+  for (const z of zs) wg.push(box(sx + 0.3, joistA, joistA, 0, H + joistA/2 + 0.008, z));
+  const smallTop = H + joistA + 0.008;
+  for (let z = -sz/2; z <= sz/2 + 1e-6; z += 0.30)
+    wg.push(box(sx + 0.3, joistB, joistA, 0, smallTop + joistB/2, z));
+  wood.push(...wg);
+
+  // 樓板模板（膠合板）
+  const deckTop = smallTop + joistB;
+  deck.push(box(sx + 0.3, TW.ply, sz + 0.3, 0, deckTop + TW.ply/2, 0));
+
+  return [
+    { geo: mergeGeometries(steel), mat: MAT.steel() },
+    { geo: mergeGeometries(wood), mat: MAT.timber() },
+    { geo: mergeGeometries(deck), mat: MAT.ply() },
+  ];
+}
+
+/* ---- 6. 框式施工架（營造安全衛生設施標準 §39） ------------------------- */
+/* 門型架 = 2 立桿 + 上下橫桿 + 框內交叉斜撐；架間交叉拉桿內外各一組
+   金屬沖孔踏板（間隙 < 3 cm）、上欄杆 90 cm、中欄杆 45 cm、踢腳板 18 cm
+   底部可調基腳座板；與構造物間以壁連座固定（縱 5.5 m、橫 4.5 m）        */
+function buildFrameScaffold(P) {
+  const { frameW: FW, frameH: FH, tube: R, railTube: RR, toe } = TW;
+  const levels = P.levels, bays = P.bays, depth = 0.75;
+  const H = FH * levels, W = FW * bays;
+  const steel = [], planks = [], rails = [];
+  const sg = [];
+
+  // 內外兩排門型架；每一榀是「平行牆面」的矩形框：
+  // 兩根立桿相距 1.83 m，上下橫桿連起來，框內交叉斜撐
+  for (const z of [0, depth]) {
+    for (let i = 0; i < bays; i++) {
+      const x0 = i * FW, x1 = (i + 1) * FW, xc = (x0 + x1) / 2;
+      for (let l = 0; l < levels; l++) {
+        const y0 = l * FH;
+        // 立桿（每榀兩根；相鄰榀共用，所以只補右側那根）
+        sg.push(tube(R/2, FH, x1, y0 + FH/2, z));
+        if (i === 0) sg.push(tube(R/2, FH, x0, y0 + FH/2, z));
+        // 上下橫桿
+        sg.push(tube(R*0.45, FW, xc, y0 + 0.14, z, 'x'));
+        sg.push(tube(R*0.45, FW, xc, y0 + FH - 0.14, z, 'x'));
+        // 框內交叉斜撐
+        const len = Math.hypot(FW, FH - 0.28);
+        const ang = Math.atan2(FH - 0.28, FW);
+        for (const sgn of [1, -1]) {
+          const g = new THREE.CylinderGeometry(R*0.34, R*0.34, len, 8);
+          g.rotateZ(Math.PI/2 - ang * sgn);
+          g.translate(xc, y0 + FH/2, z);
+          sg.push(g);
+        }
+        // 可調基腳座板（只有最底層）
+        if (l === 0) {
+          sg.push(box(0.14, 0.012, 0.14, x1, 0.006, z));
+          sg.push(tube(R*0.62, 0.09, x1, 0.10, z));
+          if (i === 0) {
+            sg.push(box(0.14, 0.012, 0.14, x0, 0.006, z));
+            sg.push(tube(R*0.62, 0.09, x0, 0.10, z));
+          }
         }
       }
     }
   }
-  out.push({ geo: mergeGeometries(g), mat: steel });
-
-  // 踏板（工作台）+ 護欄 + 踢腳板
-  const planks = [], rails = [], toes = [];
-  for (let l = 1; l <= levels; l++) {
-    const y = l * frameH;
-    planks.push(box(W, 0.05, depth*0.92, W/2, y + 0.025, depth/2));
-    // 護欄（外側）
-    rails.push(cyl(0.021, W, W/2, y + railTop, depth, 'x'));
-    rails.push(cyl(0.021, W, W/2, y + railMid, depth, 'x'));
-    rails.push(cyl(0.021, depth, 0, y + railTop, depth/2, 'z'));
-    rails.push(cyl(0.021, depth, W, y + railTop, depth/2, 'z'));
-    // 踢腳板 18 cm
-    toes.push(box(W, toeH, 0.012, W/2, y + toeH/2, depth + 0.006));
-  }
-  if (planks.length) out.push({ geo: mergeGeometries(planks), mat: plank });
-  if (rails.length) out.push({ geo: mergeGeometries(rails), mat: steel });
-  if (toes.length) out.push({ geo: mergeGeometries(toes), mat: plank });
-
-  // 壁連座（繫牆桿）：縱向 5.5 m、橫向 4.5 m 一道，鎖在結構體外牆上
-  if (P.wall === '有') {
-    const ties = [];
-    for (let y = frameH; y <= H + 0.01; y += 4.5) {
-      for (let x = 0; x <= W + 0.01; x += 5.5) {
-        ties.push(cyl(0.024, 1.35, x, y, -0.675, 'z'));   // 繫牆桿
-        ties.push(cyl(0.035, 0.03, x, y, -1.34, 'z'));    // 牆面墊板
-      }
+  // 內外排之間的橫桿（連接深度方向，每層上下各一）
+  for (let l = 0; l < levels; l++) {
+    const y0 = l * FH;
+    for (let i = 0; i <= bays; i++) {
+      const x = i * FW;
+      sg.push(tube(R*0.4, depth, x, y0 + FH - 0.14, depth/2, 'z'));
+      sg.push(tube(R*0.4, depth, x, y0 + 0.14, depth/2, 'z'));
     }
-    if (ties.length) out.push({ geo: mergeGeometries(ties), mat: steel });
-    // 被施工的外牆（示意），讓繫牆桿有東西可鎖
-    const wallGeo = new THREE.BoxGeometry(W + 0.6, H + 0.9, 0.22);
-    wallGeo.translate(W / 2, (H + 0.9) / 2, -1.46);
-    out.push({ geo: wallGeo, mat: MAT.concrete(280), ghost: true });
   }
-  return out;
+  steel.push(...sg);
+
+  // 沖孔踏板：每跨每層一片，跨在內外排之間
+  for (let l = 1; l <= levels; l++) {
+    const y = l * FH + 0.02;
+    for (let i = 0; i < bays; i++) {
+      const g = new THREE.BoxGeometry(FW - 0.08, 0.05, depth - 0.06);
+      g.translate(i * FW + FW/2, y + 0.025, depth/2);
+      planks.push(g);
+    }
+    // 兩端扣鎖
+    for (let i = 0; i <= bays; i++)
+      planks.push(box(0.05, 0.10, 0.05, i*FW, y + 0.05, depth - 0.04));
+  }
+
+  // 護欄：外側（z=depth）+ 兩端，上欄杆 90 / 中欄杆 45 / 踢腳板 18
+  const rg = [];
+  for (let l = 1; l <= levels; l++) {
+    const y = l * FH;
+    for (const yy of [TW.railTop, TW.railMid]) {
+      rg.push(tube(RR/2, W, W/2, y + yy, depth, 'x'));           // 外側
+      rg.push(tube(RR/2, depth, 0, y + yy, depth/2, 'z'));       // 左端
+      rg.push(tube(RR/2, depth, W, y + yy, depth/2, 'z'));       // 右端
+    }
+    // 護欄立柱
+    for (let i = 0; i <= bays; i++)
+      rg.push(tube(RR/2, TW.railTop + 0.05, i*FW, y + (TW.railTop)/2, depth, 'y'));
+    rails.push(box(W, toe, 0.012, W/2, y + toe/2, depth + 0.012));
+    rails.push(box(0.012, toe, depth, 0, y + toe/2, depth/2));
+    rails.push(box(0.012, toe, depth, W, y + toe/2, depth/2));
+  }
+  steel.push(...rg);
+
+  // 壁連座（繫牆桿）：縱 5.5 m、橫 4.5 m 一道，鎖在內側排架的立桿上
+  if (P.wall === '有') {
+    const tg = [];
+    for (let y = FH; y <= H + 0.01; y += 4.5)
+      for (let x = 0; x <= W + 0.01; x += 5.5) {
+        tg.push(tube(R/2, 1.30, x, y, -0.65, 'z'));
+        tg.push(box(0.10, 0.10, 0.012, x, y, -1.30));
+      }
+    steel.push(...tg);
+    const wallGeo = new THREE.BoxGeometry(W + 0.8, H + 1.0, 0.22);
+    wallGeo.translate(W/2, (H + 1.0)/2, -1.43);
+    return [
+      { geo: mergeGeometries(steel), mat: MAT.steel() },
+      { geo: mergeGeometries(planks), mat: MAT.deck() },
+      { geo: mergeGeometries(rails), mat: MAT.galv() },
+      { geo: wallGeo, mat: MAT.concrete(280), ghost: true },
+    ];
+  }
+  return [
+    { geo: mergeGeometries(steel), mat: MAT.steel() },
+    { geo: mergeGeometries(planks), mat: MAT.deck() },
+    { geo: mergeGeometries(rails), mat: MAT.galv() },
+  ];
 }
 
-/* ---- 6. 施工順序組合 ----------------------------------------------------- */
+/* ---- 7. 施工順序 -------------------------------------------------------- */
 function buildCombo(P) {
   const out = [];
   const a = 0.4, b = 0.4, h = P.h;
-  const shift = (arr, dx) => arr.map(o => { o.geo.translate(dx, 0, 0); return o; });
-  // 1 鋼筋  2 混凝土  3 模板  4 支撐  5 施工架
-  out.push(...shift(buildRebar({ form:'柱', bar:'#6', space:0.15, cover:0.04, a, b, h }), -2.6));
-  out.push(...shift(buildConcrete({ form:'柱', a, b, h, grade:280 }), -1.3));
-  out.push(...shift(buildFormwork({ a, b, h, gap:0.02 }), 0));
-  out.push(...shift(buildProps({ h: h*0.98, spanX:1.2, spanZ:1.2, space:0.6 }), 1.9));
-  out.push(...shift(buildScaffold({ levels:Math.min(2,P.levels), bays:2, rows:1, wall:true }), 3.2));
+  const mv = (arr, dx) => arr.map(o => { o.geo.translate(dx, 0, 0); return o; });
+  out.push(...mv(buildRebar({ form:'柱', bar:'#6', space:0.15, cover:0.04, a, b, h }), -3.0));
+  out.push(...mv(buildConcrete({ form:'柱', a, b, h, grade:280 }), -1.5));
+  out.push(...mv(buildColumnForm({ a, b, h, gap:0.02, clamp:0.5, clampY:0.35 }), 0));
+  out.push(...mv(buildProps({ h:2.6, spanX:1.6, spanZ:1.2, space:0.8 }), 2.4));
+  out.push(...mv(buildFrameScaffold({ levels:Math.min(2,P.levels), bays:2, wall:'有' }), 5.2));
   return out;
 }
 
-/* --------------------------------------------------------------------- spec */
+/* ---------------------------------------------------------------- specs */
 const SPEC = {
   '混凝土': {
-    title: '混凝土構件',
-    desc: '柱 / 樑 / 板 / 牆',
-    notes: () => '混凝土強度 CNS 3090：210 / 280 / 350 kgf/cm²（≈20 / 27 / 34 MPa）；坍度常用 15 cm',
+    title:'混凝土構件', desc:'柱 / 樑 / 板 / 牆',
+    notes:()=>'CNS 3090 預拌混凝土：210 / 280 / 350 kgf/cm²；坍度常用 15 cm',
     build: buildConcrete,
-    p: { form:{label:'形式', opts:['柱','樑','板','牆'], def:'柱'},
-         grade:{label:'強度 (kgf/cm²)', opts:['210','280','350'], def:'280'},
-         a:{label:'柱寬 a (m)', min:0.2, max:1.2, step:0.05, def:0.4},
-         b:{label:'柱深 b (m)', min:0.2, max:1.2, step:0.05, def:0.4},
-         h:{label:'高 h (m)', min:0.5, max:5, step:0.1, def:2.8},
-         L:{label:'長 L (m)', min:1, max:12, step:0.5, def:6},
-         W:{label:'寬 W (m)', min:1, max:12, step:0.5, def:6},
-         t:{label:'厚 t (m)', min:0.1, max:0.4, step:0.02, def:0.15} },
-  },
-  '模板': {
-    title: '柱模板',
-    desc: '4×8 呎膠合板 + 柳安角材 + 柱箍鐵',
-    notes: () => '膠合板 122×244 cm × 18 mm；角材 1.5"×1.5"；柱箍鐵每 45 cm；對拉螺栓 φ11',
-    build: buildFormwork,
-    p: { a:{label:'柱寬 (m)', min:0.2, max:1.2, step:0.05, def:0.4},
-         b:{label:'柱深 (m)', min:0.2, max:1.2, step:0.05, def:0.4},
-         h:{label:'柱高 (m)', min:0.5, max:5, step:0.1, def:2.8},
-         gap:{label:'模板間隙 (m)', min:0, max:0.06, step:0.005, def:0.02} },
-  },
+    p:{ form:{label:'形式',opts:['柱','樑','板','牆'],def:'柱'},
+        grade:{label:'強度 (kgf/cm²)',opts:['210','280','350'],def:'280'},
+        a:{label:'柱寬 (m)',min:0.2,max:1.2,step:0.05,def:0.4},
+        b:{label:'柱深 (m)',min:0.2,max:1.2,step:0.05,def:0.4},
+        h:{label:'高 (m)',min:0.5,max:5,step:0.1,def:2.8},
+        L:{label:'長 (m)',min:1,max:12,step:0.5,def:6},
+        W:{label:'寬 (m)',min:1,max:12,step:0.5,def:6},
+        t:{label:'厚 (m)',min:0.1,max:0.4,step:0.02,def:0.15} } },
+  '柱模板': {
+    title:'柱模板', desc:'4×8 呎膠合板 + 柳安角材 + 雙鋼管柱箍',
+    notes:()=>'膠合板 122×244×18 mm（水平板縫）；角材 1.5" 每 30 cm；雙鋼管柱箍每 50 cm，四角扣件',
+    build: buildColumnForm,
+    p:{ a:{label:'柱寬 (m)',min:0.2,max:1.2,step:0.05,def:0.4},
+        b:{label:'柱深 (m)',min:0.2,max:1.2,step:0.05,def:0.4},
+        h:{label:'柱高 (m)',min:0.5,max:5,step:0.1,def:2.8},
+        clamp:{label:'柱箍間距 (m)',min:0.3,max:0.9,step:0.05,def:0.5},
+        clampY:{label:'第一道高度 (m)',min:0.15,max:1,step:0.05,def:0.35},
+        gap:{label:'模板間隙 (m)',min:0,max:0.06,step:0.005,def:0.02} } },
+  '樑模板': {
+    title:'樑模板', desc:'底模 + 側模 + 樑箍 + 樑底支柱',
+    notes:()=>'底模 18 mm 膠合板；側模高度=樑深−版厚；雙鋼管樑箍每 45 cm；樑底以可調鋼管支柱@75 cm 支撐',
+    build: buildBeamForm,
+    p:{ L:{label:'樑長 (m)',min:2,max:12,step:0.5,def:6},
+        bw:{label:'樑寬 (m)',min:0.25,max:0.8,step:0.05,def:0.4},
+        bh:{label:'樑深 (m)',min:0.4,max:1.2,step:0.05,def:0.7},
+        slabT:{label:'版厚 (m)',min:0.1,max:0.3,step:0.02,def:0.15},
+        clamp:{label:'樑箍間距 (m)',min:0.3,max:0.9,step:0.05,def:0.45},
+        prop:{label:'支柱間距 (m)',min:0.5,max:1.5,step:0.05,def:0.75} } },
   '鋼筋': {
-    title: '竹節鋼筋',
-    desc: '柱（主筋＋#3 箍筋）/ 板（雙層雙向）',
-    notes: () => 'CNS 560 SD280 / SD420；#3=13 #4=13 #5=16 #6=19 #7=22 #8=25 mm；保護層 柱 4 cm、板 2 cm',
+    title:'竹節鋼筋（CNS 560）', desc:'柱：主筋 + #3 箍筋 / 板：雙層雙向 + 撐鐵',
+    notes:()=>'SD280 / SD420；#3=10 #4=13 #5=16 #6=19 #7=22 #8=25 mm；箍筋 #3；保護層 柱 4 cm、板 2 cm',
     build: buildRebar,
-    p: { form:{label:'形式', opts:['柱','板'], def:'柱'},
-         bar:{label:'主筋號數', opts:['#3','#4','#5','#6','#7','#8'], def:'#6'},
-         space:{label:'箍筋/鋼筋間距 (m)', min:0.1, max:0.4, step:0.01, def:0.15},
-         cover:{label:'保護層 (m)', min:0.02, max:0.1, step:0.005, def:0.04},
-         a:{label:'柱寬 (m)', min:0.2, max:1.2, step:0.05, def:0.4},
-         b:{label:'柱深 (m)', min:0.2, max:1.2, step:0.05, def:0.4},
-         h:{label:'柱高 (m)', min:0.5, max:5, step:0.1, def:2.8},
-         L:{label:'板長 (m)', min:1, max:10, step:0.5, def:4},
-         W:{label:'板寬 (m)', min:1, max:10, step:0.5, def:4},
-         t:{label:'板厚 (m)', min:0.1, max:0.4, step:0.02, def:0.15} },
-  },
+    p:{ form:{label:'形式',opts:['柱','板'],def:'柱'},
+        bar:{label:'主筋號數',opts:['#3','#4','#5','#6','#7','#8'],def:'#6'},
+        space:{label:'箍筋/鋼筋間距 (m)',min:0.1,max:0.4,step:0.01,def:0.15},
+        cover:{label:'保護層 (m)',min:0.02,max:0.1,step:0.005,def:0.04},
+        a:{label:'柱寬 (m)',min:0.2,max:1.2,step:0.05,def:0.4},
+        b:{label:'柱深 (m)',min:0.2,max:1.2,step:0.05,def:0.4},
+        h:{label:'柱高 (m)',min:0.5,max:5,step:0.1,def:2.8},
+        L:{label:'板長 (m)',min:1,max:10,step:0.5,def:4},
+        W:{label:'板寬 (m)',min:1,max:10,step:0.5,def:4},
+        t:{label:'板厚 (m)',min:0.1,max:0.4,step:0.02,def:0.15} } },
   '模板支撐': {
-    title: '可調鋼管支柱',
-    desc: '俗稱「烏龜」，撐樓板模板用',
-    notes: () => 'φ48.6×2.3 mm 可調鋼管支柱，常用 2.1–3.6 m；上方大引/小引角材',
+    title:'模板支撐（可調鋼管支柱）', desc:'支柱 + 大/小樑母索 + 水平繫條 + 交叉斜撐',
+    notes:()=>'CNS 5644 可調鋼管支柱；§23 高度>3.5 m 時每 2 m 設縱橫水平繫條，最上層及每 5 層設側面繫條與交叉斜撐',
     build: buildProps,
-    p: { h:{label:'支撐高 (m)', min:1.5, max:4, step:0.1, def:2.8},
-         space:{label:'間距 (m)', min:0.4, max:1.2, step:0.1, def:0.6},
-         spanX:{label:'縱向跨 (m)', min:0.6, max:4, step:0.2, def:1.8},
-         spanZ:{label:'橫向跨 (m)', min:0.6, max:4, step:0.2, def:1.2} },
-  },
+    p:{ h:{label:'支撐高 (m)',min:1.5,max:4.5,step:0.1,def:2.8},
+        space:{label:'支柱間距 (m)',min:0.5,max:1.2,step:0.1,def:0.8},
+        spanX:{label:'縱向跨 (m)',min:1,max:5,step:0.2,def:2.4},
+        spanZ:{label:'橫向跨 (m)',min:1,max:5,step:0.2,def:1.6} } },
   '框式施工架': {
-    title: '框式施工架',
-    desc: '門型框 + 交叉拉桿 + 踏板 + 護欄 + 踢腳板',
-    notes: () => '門型框 1.83 m 寬 × 1.90 m 高；護欄 90/45 cm；踢腳板 18 cm；壁連座縱 5.5 / 橫 4.5 m',
-    build: buildScaffold,
-    p: { levels:{label:'層數', min:1, max:4, step:1, def:2},
-         bays:{label:'跨數', min:1, max:6, step:1, def:3},
-         rows:{label:'排數', min:1, max:2, step:1, def:1},
-         wall:{label:'壁連座', opts:['有','無'], def:'有'} },
-  },
+    title:'框式施工架', desc:'門型架 + 交叉拉桿 + 沖孔踏板 + 護欄 + 踢腳板',
+    notes:()=>'營造安全衛生設施標準 §39：門型架 1.83×1.90 m；踏板間隙<3 cm；護欄 90/45 cm；踢腳板 18 cm；壁連座縱 5.5 / 橫 4.5 m',
+    build: buildFrameScaffold,
+    p:{ levels:{label:'層數',min:1,max:4,step:1,def:2},
+        bays:{label:'跨數',min:1,max:6,step:1,def:3},
+        wall:{label:'壁連座',opts:['有','無'],def:'有'} } },
   '施工順序': {
-    title: '一層樓施工順序',
-    desc: '鋼筋 → 混凝土 → 模板 → 支撐 → 施工架',
-    notes: () => '實際順序為 放樣 → 綁鋼筋 → 組模板+支撐 → 澆置 → 養護 → 拆模 → 架施工架',
+    title:'一層樓施工順序', desc:'鋼筋 → 混凝土 → 柱模板 → 模板支撐 → 施工架',
+    notes:()=>'實際流程：放樣 → 柱筋綁紮 → 柱模組立 → 樑版模+支撐 → 澆置 → 養護 → 拆模 → 架設施工架',
     build: buildCombo,
-    p: { h:{label:'柱高 (m)', min:1, max:5, step:0.1, def:2.8},
-         levels:{label:'施工架層數', min:1, max:4, step:1, def:2} },
-  },
+    p:{ h:{label:'柱高 (m)',min:1,max:5,step:0.1,def:2.8},
+        levels:{label:'施工架層數',min:1,max:4,step:1,def:2} } },
 };
 
-/* --------------------------------------------------------------------- UI */
+/* ------------------------------------------------------------------ UI */
 const state = { mode:'混凝土', vals:{} };
 const group = new THREE.Group();
 scene.add(group);
@@ -479,7 +593,6 @@ function valsFor(mode) {
   state.vals[mode] = v;
   return v;
 }
-
 function buildTabs() {
   const wrap = document.getElementById('tabs');
   wrap.innerHTML = '';
@@ -491,16 +604,13 @@ function buildTabs() {
     wrap.appendChild(b);
   });
 }
-
 function buildParams() {
-  const spec = SPEC[state.mode];
-  const vals = valsFor(state.mode);
+  const spec = SPEC[state.mode], vals = valsFor(state.mode);
   const wrap = document.getElementById('params');
   wrap.innerHTML = '';
   document.getElementById('title').textContent = spec.title;
   document.getElementById('desc').textContent = spec.desc;
   document.getElementById('spec').textContent = spec.notes ? spec.notes() : '';
-
   for (const [k, s] of Object.entries(spec.p)) {
     const row = document.createElement('div');
     row.className = 'p';
@@ -527,45 +637,39 @@ function buildParams() {
   }
 }
 
-let triCount = 0;
 function rebuild() {
-  const spec = SPEC[state.mode];
-  const vals = state.vals[state.mode];
+  const spec = SPEC[state.mode], vals = state.vals[state.mode];
   while (group.children.length) {
     const c = group.children.pop();
     c.geometry?.dispose();
   }
-  triCount = 0;
+  let tris = 0;
   for (const { geo, mat, ghost } of spec.build(vals)) {
     if (!geo) continue;
     const m = new THREE.Mesh(geo, mat);
     m.castShadow = !ghost; m.receiveShadow = true;
-    if (ghost) { m.material = mat.clone(); m.material.transparent = true; m.material.opacity = 0.35; }
+    if (ghost) { m.material = mat.clone(); m.material.transparent = true; m.material.opacity = 0.32; }
     group.add(m);
-    const n = geo.index ? geo.index.count : geo.attributes.position.count;
-    triCount += n / 3;
+    tris += (geo.index ? geo.index.count : geo.attributes.position.count) / 3;
   }
   document.getElementById('stat').textContent =
-    `${Math.round(triCount).toLocaleString()} 三角形 · 拖曳旋轉 · 滾輪縮放`;
+    `${Math.round(tris).toLocaleString()} 三角形 · 拖曳旋轉 · 滾輪縮放`;
   fitView();
 }
-
 function fitView() {
   const bb = new THREE.Box3().setFromObject(group);
   if (bb.isEmpty()) return;
-  const c = bb.getCenter(new THREE.Vector3());
-  const s = bb.getSize(new THREE.Vector3());
-  const d = Math.max(s.x, s.y, s.z) * 1.7;
+  const c = bb.getCenter(new THREE.Vector3()), s = bb.getSize(new THREE.Vector3());
+  const d = Math.max(s.x, s.y, s.z) * 1.65;
   controls.target.copy(c);
-  camera.position.set(c.x + d*0.7, c.y + d*0.55, c.z + d*0.85);
+  camera.position.set(c.x + d*0.72, c.y + d*0.6, c.z + d*0.88);
   controls.update();
 }
 
 buildTabs(); buildParams(); rebuild();
 window.__ready = true;
-
 addEventListener('resize', () => {
-  const w = innerWidth - 224;
+  const w = innerWidth - 230;
   camera.aspect = w / innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(w, innerHeight);
