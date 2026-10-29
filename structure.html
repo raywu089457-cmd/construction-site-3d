@@ -1,0 +1,452 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>結構建材生成器</title>
+<style>
+  :root{color-scheme:dark}
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0;overflow:hidden}
+  body{background:#0b0d10;color:#e8eaed;font:13px/1.45 system-ui,-apple-system,"Noto Sans TC",sans-serif}
+  canvas{display:block}
+  #panel{position:fixed;top:0;left:0;bottom:0;width:212px;background:#101318ee;border-right:1px solid #1e242c;
+    z-index:10;display:flex;flex-direction:column;overflow-y:auto}
+  h2{font-size:11px;letter-spacing:.08em;color:#6b7280;margin:10px 10px 6px;text-transform:uppercase}
+  .tabs{display:flex;flex-wrap:wrap;gap:4px;padding:0 8px}
+  .tabs button{flex:1 1 44%;background:#171b21;border:1px solid #222833;color:#c7ccd4;border-radius:7px;
+    padding:7px 4px;font-size:11px;font-weight:600;cursor:pointer}
+  .tabs button.on{border-color:#1f6feb;background:#16202e;color:#fff}
+  .params{padding:0 10px}
+  .p{margin:9px 0}
+  .p label{display:flex;justify-content:space-between;font-size:11px;color:#9aa3ad;margin-bottom:3px}
+  .p label b{color:#e8eaed;font-weight:600}
+  .p input[type=range]{width:100%}
+  .p .row{display:flex;gap:4px}
+  .p .row button{flex:1;background:#171b21;border:1px solid #222833;color:#c7ccd4;border-radius:6px;
+    padding:5px;font-size:10px;cursor:pointer}
+  .p .row button.on{border-color:#1f6feb;background:#16202e;color:#fff}
+  #info{position:fixed;left:212px;right:0;top:0;padding:10px 14px;z-index:9;pointer-events:none;
+    font-size:11px;color:#8b929c;background:linear-gradient(#0b0d10dd,#0b0d1000)}
+  #info b{color:#e8eaed;font-size:13px}
+  #stat{position:fixed;left:212px;bottom:10px;right:0;text-align:center;font-size:11px;color:#6b7280;z-index:9}
+</style>
+</head>
+<body>
+<div id="panel">
+  <h2>構件</h2>
+  <div class="tabs" id="tabs"></div>
+  <h2>參數</h2>
+  <div class="params" id="params"></div>
+</div>
+<div id="info"><b id="title">混凝土柱</b><div id="desc"></div></div>
+<div id="stat"></div>
+
+<script type="importmap">
+{ "imports": { "three": "./vendor/three.module.js", "three/addons/": "./vendor/addons/" } }
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0b0d10);
+const camera = new THREE.PerspectiveCamera(42, (innerWidth-212)/innerHeight, 0.05, 300);
+const renderer = new THREE.WebGLRenderer({ antialias:true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth-212, innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+document.body.appendChild(renderer.domElement);
+renderer.domElement.style.position='fixed';
+renderer.domElement.style.left='212px';
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.maxPolarAngle = Math.PI*0.495;
+controls.minDistance = 0.8;
+controls.maxDistance = 60;
+controls.target.set(0, 1.6, 0);
+camera.position.set(4.2, 3.2, 5.4);
+
+scene.add(new THREE.HemisphereLight(0xc8ddf2, 0x1b222b, 1.2));
+const sun = new THREE.DirectionalLight(0xfff3e2, 2.8);
+sun.position.set(6, 10, 7);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048,2048);
+sun.shadow.bias = -0.0012;
+Object.assign(sun.shadow.camera, { left:-12, right:12, top:12, bottom:-12, near:0.5, far:40 });
+sun.shadow.camera.updateProjectionMatrix();
+scene.add(sun);
+scene.add(new THREE.DirectionalLight(0x9fb4cf, 0.5).translateX(-8).translateY(5));
+
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(120,120),
+  new THREE.MeshStandardMaterial({ color:0x343b45, roughness:0.97 }));
+ground.rotation.x = -Math.PI/2;
+ground.receiveShadow = true;
+scene.add(ground);
+const grid = new THREE.GridHelper(120, 120, 0x46525f, 0x2a323b);
+grid.position.y = 0.002; grid.material.opacity = 0.45; grid.material.transparent = true;
+scene.add(grid);
+
+/* --------------------------------------------------------------- materials */
+const tex = new THREE.TextureLoader();
+const cache = {};
+function pbr(name, repeat = [2,2], opts = {}) {
+  if (cache[name]) return cache[name];
+  const base = `textures/${name}/`;
+  const map = tex.load(base + 'map_1k.jpg');
+  map.wrapS = map.wrapT = THREE.RepeatWrapping;
+  map.repeat.set(...repeat);
+  map.colorSpace = THREE.SRGBColorSpace;
+  const normalMap = tex.load(base + 'normalMap_1k.jpg');
+  normalMap.wrapS = normalMap.wrapT = THREE.RepeatWrapping;
+  normalMap.repeat.set(...repeat);
+  const roughnessMap = tex.load(base + 'roughnessMap_1k.jpg');
+  roughnessMap.wrapS = roughnessMap.wrapT = THREE.RepeatWrapping;
+  roughnessMap.repeat.set(...repeat);
+  const m = new THREE.MeshStandardMaterial({
+    map, normalMap, roughnessMap,
+    metalness: opts.metalness ?? 0.0,
+    color: opts.color ?? 0xffffff,
+  });
+  cache[name] = m;
+  return m;
+}
+
+/* ----------------------------------------------------------------- builders */
+const V3 = (x,y,z) => new THREE.Vector3(x,y,z);
+function box(w,h,d, x,y,z, rotY=0) {
+  const g = new THREE.BoxGeometry(w,h,d);
+  if (rotY) g.rotateY(rotY);
+  g.translate(x,y,z);
+  return g;
+}
+function cyl(r,h, x,y,z, axis='y') {
+  const g = new THREE.CylinderGeometry(r,r,h, 10, 1, false);
+  if (axis === 'x') g.rotateZ(Math.PI/2);
+  if (axis === 'z') g.rotateX(Math.PI/2);
+  g.translate(x,y,z);
+  return g;
+}
+
+// ---- 1. 混凝土 -------------------------------------------------------------
+function buildConcrete(P) {
+  const parts = [];
+  if (P.type === '柱') parts.push(box(P.a, P.h, P.b, 0, P.h/2, 0));
+  else if (P.type === '樑') parts.push(box(P.L, P.h, P.b, 0, P.h/2 + 2.4, 0));
+  else if (P.type === '板') parts.push(box(P.L, P.t, P.W, 0, P.t/2, 0));
+  else parts.push(box(P.L, P.h, P.t, 0, P.h/2, 0));
+  const geo = mergeGeometries(parts);
+  const mat = pbr('brushed_concrete', [1.2,1.2]);
+  return [{ geo, mat }];
+}
+
+// ---- 2. 模板 ---------------------------------------------------------------
+function buildFormwork(P) {
+  const t = 0.018;              // 18 mm 膠合板
+  const gap = P.gap ?? 0.02;
+  const out = [];
+  const ply = pbr('plywood', [2,2]);
+  const steel = pbr('rusty_metal', [3,3], { metalness:0.8 });
+
+  const w = P.a + gap*2, d = P.b + gap*2, h = P.h;
+  // 四面模板
+  out.push({ geo: box(t, h, d + t*2,  (w+t)/2, h/2, 0), mat: ply });
+  out.push({ geo: box(t, h, d + t*2, -(w+t)/2, h/2, 0), mat: ply });
+  out.push({ geo: box(w, h, t, 0, h/2,  (d+t)/2), mat: ply });
+  out.push({ geo: box(w, h, t, 0, h/2, -(d+t)/2), mat: ply });
+
+  // 橫檔（walers）+ 對拉螺栓
+  const bolts = [];
+  const levels = Math.max(2, Math.round(h / 0.6));
+  for (let i = 1; i <= levels; i++) {
+    const y = h * i / (levels + 1);
+    // 左右兩側橫檔
+    out.push({ geo: box(0.09, 0.09, d + t*2 + 0.1, (w/2 + 0.08), y, 0), mat: steel });
+    out.push({ geo: box(0.09, 0.09, d + t*2 + 0.1, -(w/2 + 0.08), y, 0), mat: steel });
+    bolts.push(cyl(0.012, w + t*2 + 0.2, 0, y, 0, 'x'));
+    bolts.push(cyl(0.035, 0.03, (w/2+0.12), y, 0, 'x'));
+    bolts.push(cyl(0.035, 0.03, -(w/2+0.12), y, 0, 'x'));
+  }
+  if (bolts.length) out.push({ geo: mergeGeometries(bolts), mat: steel });
+  return out;
+}
+
+// ---- 3. 鋼筋 ---------------------------------------------------------------
+function buildRebar(P) {
+  const out = [];
+  const mat = pbr('rusty_metal', [4,4], { metalness:0.85, color:0x9a6a4a });
+  const cover = P.cover;
+  const r = P.dia / 1000 / 2;
+  const geos = [];
+
+  if (P.type === '柱') {
+    const sx = P.a - cover*2, sz = P.b - cover*2, h = P.h;
+    // 主筋 4 角落
+    for (const x of [-sx/2, sx/2]) for (const z of [-sz/2, sz/2]) geos.push(cyl(r, h, x, h/2, z));
+    // 箍筋
+    const step = P.space;
+    for (let y = step; y < h; y += step) {
+      const peri = 2*(sx+sz);
+      geos.push(box(sx + r*2, r*2, r*2, 0, y,  sz/2));
+      geos.push(box(sx + r*2, r*2, r*2, 0, y, -sz/2));
+      geos.push(box(r*2, r*2, sz,  sx/2, y, 0));
+      geos.push(box(r*2, r*2, sz, -sx/2, y, 0));
+    }
+  } else {
+    // 板：雙層雙向
+    const L = P.L, W = P.W, t = P.t;
+    const sx = L - cover*2, sz = W - cover*2;
+    for (const y of [cover, t - cover]) {
+      for (let z = -sz/2; z <= sz/2 + 0.001; z += P.space) geos.push(cyl(r, sx, 0, y, z, 'x'));
+      for (let x = -sx/2; x <= sx/2 + 0.001; x += P.space) geos.push(cyl(r, sz, x, y, 0, 'z'));
+    }
+  }
+  out.push({ geo: mergeGeometries(geos), mat });
+  return out;
+}
+
+// ---- 4. 鷹架 ---------------------------------------------------------------
+function buildScaffold(P) {
+  const r = 0.024;               // 48 mm 鋼管
+  const bay = P.bay, lift = P.lift, levels = P.levels, rows = P.rows, bays = P.bays;
+  const out = [];
+  const steel = pbr('rusty_metal', [6,6], { metalness:0.75, color:0xb8bcc0 });
+  const plank = pbr('plywood', [4,4]);
+
+  const g = [];
+  const H = lift * levels;
+  const depth = rows * bay;
+
+  // 立桿
+  for (let i = 0; i <= bays; i++) {
+    const x = i * bay;
+    for (let j = 0; j <= rows; j++) {
+      const z = j * bay;
+      g.push(cyl(r, H + 0.15, x, (H+0.15)/2, z));
+      g.push(cyl(0.05, 0.06, x, 0.03, z));           // 底座
+    }
+  }
+  // 橫桿（每層、每排）
+  for (let l = 1; l <= levels; l++) {
+    const y = l * lift;
+    for (let j = 0; j <= rows; j++) {
+      const z = j * bay;
+      g.push(cyl(r*0.9, bays*bay, bays*bay/2, y, z, 'x'));
+    }
+    for (let i = 0; i <= bays; i++) {
+      const x = i * bay;
+      g.push(cyl(r*0.9, depth, x, y, depth/2, 'z'));
+    }
+  }
+  // 斜撐（每跨外側交叉）
+  for (let i = 0; i < bays; i++) {
+    const x0 = i*bay, x1 = (i+1)*bay;
+    for (let l = 0; l < levels; l++) {
+      const y0 = l*lift, y1 = (l+1)*lift;
+      const len = Math.hypot(bay, lift);
+      const ang = Math.atan2(lift, bay);
+      const geo = new THREE.CylinderGeometry(r*0.8, r*0.8, len, 8);
+      geo.rotateZ(Math.PI/2 - ang);
+      geo.translate((x0+x1)/2, (y0+y1)/2, 0);
+      g.push(geo);
+      const geo2 = new THREE.CylinderGeometry(r*0.8, r*0.8, len, 8);
+      geo2.rotateZ(-(Math.PI/2 - ang));
+      geo2.translate((x0+x1)/2, (y0+y1)/2, 0);
+      g.push(geo2);
+    }
+  }
+  out.push({ geo: mergeGeometries(g), mat: steel });
+
+  // 工作平台（踏板）
+  const planks = [];
+  for (let l = 1; l <= levels; l++) {
+    const y = l*lift + 0.03;
+    planks.push(box(bays*bay, 0.04, bay*0.92, bays*bay/2, y, bay*0.5));
+  }
+  if (planks.length) out.push({ geo: mergeGeometries(planks), mat: plank });
+  return out;
+}
+
+/* ------------------------------------------------------------------- params */
+const SPEC = {
+  '混凝土': {
+    title: '混凝土構件',
+    desc: '鋼筋混凝土的實體：柱 / 樑 / 板 / 牆',
+    build: buildConcrete,
+    p: { type:{label:'形式', opts:['柱','樑','板','牆'], def:'柱'},
+         a:{label:'寬 a (m)', min:0.2, max:1.2, step:0.05, def:0.4},
+         b:{label:'深 b (m)', min:0.2, max:1.2, step:0.05, def:0.4},
+         h:{label:'高 h (m)', min:0.5, max:5, step:0.1, def:2.8},
+         L:{label:'長 L (m)', min:1, max:12, step:0.5, def:6},
+         W:{label:'寬 W (m)', min:1, max:12, step:0.5, def:6},
+         t:{label:'厚 t (m)', min:0.1, max:0.4, step:0.02, def:0.15} },
+  },
+  '模板': {
+    title: '柱模板',
+    desc: '18 mm 膠合板 + 橫檔 + 對拉螺栓',
+    build: buildFormwork,
+    p: { a:{label:'柱寬 (m)', min:0.2, max:1.2, step:0.05, def:0.4},
+         b:{label:'柱深 (m)', min:0.2, max:1.2, step:0.05, def:0.4},
+         h:{label:'柱高 (m)', min:0.5, max:5, step:0.1, def:2.8},
+         gap:{label:'模板間隙 (m)', min:0, max:0.06, step:0.005, def:0.02} },
+  },
+  '鋼筋': {
+    title: '鋼筋',
+    desc: '柱主筋 + 箍筋 / 板雙層雙向鋼筋網',
+    build: buildRebar,
+    p: { type:{label:'形式', opts:['柱','板'], def:'柱'},
+         dia:{label:'鋼筋徑 (mm)', min:10, max:32, step:2, def:19},
+         space:{label:'間距 (m)', min:0.1, max:0.4, step:0.01, def:0.15},
+         cover:{label:'保護層 (m)', min:0.02, max:0.1, step:0.005, def:0.04},
+         a:{label:'柱寬 (m)', min:0.2, max:1.2, step:0.05, def:0.4},
+         b:{label:'柱深 (m)', min:0.2, max:1.2, step:0.05, def:0.4},
+         h:{label:'柱高 (m)', min:0.5, max:5, step:0.1, def:2.8},
+         L:{label:'板長 (m)', min:1, max:10, step:0.5, def:4},
+         W:{label:'板寬 (m)', min:1, max:10, step:0.5, def:4},
+         t:{label:'板厚 (m)', min:0.1, max:0.4, step:0.02, def:0.15} },
+  },
+  '鷹架': {
+    title: '施工鷹架',
+    desc: 'φ48 鋼管 + 斜撐 + 踏板',
+    build: buildScaffold,
+    p: { bay:{label:'跨距 (m)', min:1.2, max:2.4, step:0.1, def:1.8},
+         lift:{label:'層高 (m)', min:1.2, max:2.2, step:0.1, def:1.8},
+         levels:{label:'層數', min:1, max:5, step:1, def:2},
+         rows:{label:'排數', min:1, max:3, step:1, def:1},
+         bays:{label:'跨數', min:1, max:6, step:1, def:3} },
+  },
+  '組合': {
+    title: '結構體組合',
+    desc: '鋼筋 → 模板 → 混凝土 → 鷹架（實際施工順序）',
+    build: buildCombo,
+    p: { h:{label:'柱高 (m)', min:1, max:5, step:0.1, def:2.8},
+         levels:{label:'鷹架層數', min:1, max:4, step:1, def:2} },
+  },
+};
+
+function buildCombo(P) {
+  const out = [];
+  const a=0.4, b=0.4, h=P.h;
+  // 左側：鋼筋
+  out.push(...buildRebar({ type:'柱', dia:19, space:0.15, cover:0.04, a, b, h })
+      .map(o => { o.geo.translate(-1.4, 0, 0); return o; }));
+  // 中間：混凝土
+  out.push(...buildConcrete({ type:'柱', a, b, h }).map(o => o));
+  // 右側：柱模板 + 鷹架
+  out.push(...buildFormwork({ a, b, h, gap:0.02 })
+      .map(o => { o.geo.translate(1.6, 0, 0); return o; }));
+  out.push(...buildScaffold({ bay:1.8, lift:1.8, levels:P.levels, rows:1, bays:2 })
+      .map(o => { o.geo.translate(2.6, 0, -2.6); return o; }));
+  return out;
+}
+
+/* --------------------------------------------------------------------- UI */
+const state = { mode:'混凝土', vals:{} };
+let group = new THREE.Group();
+scene.add(group);
+
+function initVals(mode) {
+  const v = {};
+  for (const [k, s] of Object.entries(SPEC[mode].p)) v[k] = s.def;
+  state.vals[mode] = state.vals[mode] || v;
+  return state.vals[mode];
+}
+
+function buildTabs() {
+  const wrap = document.getElementById('tabs');
+  wrap.innerHTML = '';
+  Object.keys(SPEC).forEach(k => {
+    const b = document.createElement('button');
+    b.textContent = k;
+    b.className = (k === state.mode ? 'on' : '');
+    b.onclick = () => { state.mode = k; buildTabs(); buildParams(); rebuild(); };
+    wrap.appendChild(b);
+  });
+}
+
+function buildParams() {
+  const spec = SPEC[state.mode];
+  const vals = initVals(state.mode);
+  const wrap = document.getElementById('params');
+  wrap.innerHTML = '';
+  document.getElementById('title').textContent = spec.title;
+  document.getElementById('desc').textContent = spec.desc;
+
+  for (const [k, s] of Object.entries(spec.p)) {
+    const row = document.createElement('div');
+    row.className = 'p';
+    if (s.opts) {
+      row.innerHTML = `<label>${s.label}</label><div class="row"></div>`;
+      const r = row.querySelector('.row');
+      s.opts.forEach(o => {
+        const b = document.createElement('button');
+        b.textContent = o;
+        b.className = (vals[k] === o ? 'on' : '');
+        b.onclick = () => { vals[k] = o; buildParams(); rebuild(); };
+        r.appendChild(b);
+      });
+    } else {
+      const id = 'f_' + k;
+      row.innerHTML = `<label>${s.label}<b id="${id}v">${vals[k]}</b></label>
+        <input id="${id}" type="range" min="${s.min}" max="${s.max}" step="${s.step}" value="${vals[k]}">`;
+      row.querySelector('input').oninput = (e) => {
+        vals[k] = +e.target.value;
+        row.querySelector('b').textContent = vals[k];
+        rebuild();
+      };
+    }
+    wrap.appendChild(row);
+  }
+}
+
+let triCount = 0;
+function rebuild() {
+  const spec = SPEC[state.mode];
+  const vals = state.vals[state.mode];
+  while (group.children.length) {
+    const c = group.children.pop();
+    c.geometry?.dispose();
+  }
+  const pieces = spec.build(vals);
+  triCount = 0;
+  for (const { geo, mat } of pieces) {
+    if (!geo) continue;
+    const m = new THREE.Mesh(geo, mat);
+    m.castShadow = true; m.receiveShadow = true;
+    group.add(m);
+    const idx = geo.index ? geo.index.count : geo.attributes.position.count;
+    triCount += idx / 3;
+  }
+  document.getElementById('stat').textContent =
+    `${Math.round(triCount).toLocaleString()} 三角形 · 拖曳旋轉 · 滾輪縮放`;
+  fitView();
+}
+
+function fitView() {
+  const box = new THREE.Box3().setFromObject(group);
+  if (box.isEmpty()) return;
+  const c = box.getCenter(new THREE.Vector3());
+  const s = box.getSize(new THREE.Vector3());
+  const d = Math.max(s.x, s.y, s.z) * 1.7;
+  controls.target.copy(c);
+  camera.position.set(c.x + d*0.7, c.y + d*0.55, c.z + d*0.85);
+  controls.update();
+}
+
+buildTabs(); buildParams(); rebuild();
+window.__ready = true;
+
+addEventListener('resize', () => {
+  const w = innerWidth - 212;
+  camera.aspect = w / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(w, innerHeight);
+});
+renderer.setAnimationLoop(() => { controls.update(); renderer.render(scene, camera); });
+</script>
+</body>
+</html>

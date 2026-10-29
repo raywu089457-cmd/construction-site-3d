@@ -21,6 +21,7 @@ python serve.py --port 4211
 | `scene.html` | 兩邊素材合體的完整工地場景，三種預設視角 |
 | `editor.html` | **組裝編輯器**（42 種零件）：自由擺放、鎖點吸附、階段設定、鏡頭運鏡、匯出 MP4 |
 | `materials.html` | 9 組建材 PBR 貼圖展示（磚、混凝土、膠合板、碎石、鏽蝕、瀝青、砂） |
+| `structure.html` | **程序化結構建材生成器**：混凝土／模板／鋼筋／鷹架／組合，全部可調參數 |
 
 ## 編輯器怎麼用
 
@@ -97,7 +98,21 @@ CC BY 的素材需要標註作者，使用時請保留上表。
 
 結果：2.9 GB 的圍籬 → 9.3 MB / 5 萬面。
 
-### BIM / Revit 素材說明
+## 程序化結構建材（structure.html）
+
+結構體建材是重複性幾何，用程式生成比找模型準確：
+
+| 構件 | 內容 | 參數 |
+|---|---|---|
+| **混凝土** | 柱 / 樑 / 板 / 牆 | 寬、深、高、長、厚 |
+| **模板** | 18 mm 膠合板 + 橫檔 + 對拉螺栓 | 柱寬深高、模板間隙 |
+| **鋼筋** | 柱（4 主筋 + 箍筋）/ 板（雙層雙向鋼筋網） | 鋼筋徑、間距、保護層 |
+| **鷹架** | φ48 立桿、橫桿、斜撐、踏板、底座 | 跨距、層高、層數、排數、跨數 |
+| **組合** | 鋼筋 → 混凝土 → 模板 → 鷹架（施工順序並列） | 柱高、鷹架層數 |
+
+貼圖直接吃 `textures/` 裡的 PBR：混凝土用 `brushed_concrete`、模板用 `plywood`、鋼筋與鷹架用 `rusty_metal`。
+
+## BIM / Revit 素材說明
 
 `.rfa`（Revit 家族）**沒有免費的轉檔路徑**：ProtoTech / CAD Exchanger / datakit 的
 RFA→glTF 轉換器全部需要先安裝 Revit，convert.guru 是線上付費服務。
@@ -105,6 +120,18 @@ Blender 5.2 也不內建 IFC / DXF 匯入（需要另外裝 Bonsai 或 DXF addon
 
 能直接吃進這個專案的格式：**glTF/GLB、FBX、OBJ、USD/USDa、.blend**。
 所以素材都從提供這些格式的來源取得（Poly Haven、OpenGameArt、Quaternius、Kenney）。
+
+**IFC 可以轉**（`tools/ifc2glb.py`，用 ifcopenshell + trimesh）：
+
+```bash
+pip install ifcopenshell trimesh scipy numpy
+python tools/ifc2glb.py model.ifc out.glb
+```
+
+實測 buildingSMART 官方 `Building-Structural.ifc`：16 個構件、1,496 面、40 KB。
+BIM 模型只有材質名稱沒有貼圖，所以轉出來是平塗色（依名稱對應混凝土／鋼構／木作／磚）。
+
+免費 IFC 來源：buildingSMART Certification-datasets、BIMobject、BIM&CO、Modlar。
 
 ## 已知限制
 
