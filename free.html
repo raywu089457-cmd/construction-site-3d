@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b0d10">
+<title>免費工地素材</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; margin: 0; overflow: hidden; }
+  body { background:#0b0d10; color:#e8eaed; font:14px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans TC",sans-serif; }
+  canvas { display: block; touch-action: none; }
+  header { position: fixed; top:0; left:0; right:0; z-index:10;
+    padding: calc(env(safe-area-inset-top) + 10px) 14px 10px;
+    background: linear-gradient(#0b0d10ee,#0b0d1000); pointer-events:none; }
+  h1 { margin:0; font-size:15px; font-weight:600; }
+  #sub { font-size:11px; color:#8b929c; margin-top:2px; }
+  #panel { position: fixed; left:0; right:0; bottom:0; z-index:10;
+    padding: 8px 10px calc(env(safe-area-inset-bottom) + 8px);
+    background: linear-gradient(#0b0d1000,#0b0d10f2 30%);
+    display:flex; gap:6px; overflow-x:auto; -webkit-overflow-scrolling:touch; }
+  #panel::-webkit-scrollbar { display:none; }
+  .chip { flex:0 0 auto; display:flex; flex-direction:column; gap:1px;
+    background:#14181ecc; border:1px solid #222833; border-radius:9px;
+    padding:6px 9px; min-width:96px; max-width:150px; cursor:pointer; }
+  .chip.on { border-color:#1f6feb; background:#16202e; }
+  .chip .name { font-size:11px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .chip .meta { font-size:10px; color:#8b929c; white-space:nowrap; }
+  #toggle { position: fixed; right:12px; top: calc(env(safe-area-inset-top) + 10px); z-index:11;
+    background:#14181ecc; border:1px solid #222833; color:#c7ccd4; border-radius:8px;
+    padding:6px 10px; font-size:11px; font-weight:600; }
+  @media (max-height:560px) {
+    header { padding-top: calc(env(safe-area-inset-top) + 5px); padding-bottom:3px; }
+    h1 { font-size:13px; } #sub { display:none; }
+    .chip { padding:4px 7px; min-width:86px; }
+    .chip .name { font-size:10px; } .chip .meta { font-size:9px; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>免費工地素材</h1>
+  <div id="sub">OpenGameArt CC0 工地包 ＋ 挖土機/堆高機 · 點卡片切換</div>
+</header>
+<button id="toggle">全部</button>
+<div id="panel"></div>
+
+<script type="importmap">
+{ "imports": { "three": "./vendor/three.module.js", "three/addons/": "./vendor/addons/" } }
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+
+const MODELS = [
+  { file: 'models/free/site_tour.glb',      name: '整座工地', note: '建築＋塔吊＋貨櫃＋材料', color: '#7fdc7f' },
+  { file: 'models/free/excavator.glb',      name: '挖土機',   note: 'CC0 · OpenGameArt',      color: '#e8c33c' },
+  { file: 'models/free/forklift.glb',       name: '堆高機',   note: 'OpenGameArt',            color: '#c9c9c9' },
+  { file: 'models/free/Crane-On-Ground.glb',name: '落地塔吊', note: '工地包',                 color: '#f0d24a' },
+  { file: 'models/free/Crane-Mounted.glb',  name: '附牆吊車', note: '工地包',                 color: '#f0d24a' },
+  { file: 'models/free/Trucks.glb',         name: '工程車',   note: '工地包 · 水泥車/砂石車',  color: '#8fb8e0' },
+  { file: 'models/free/Building.glb',       name: '施工中大樓',note: '工地包',                color: '#c8c8c8' },
+];
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0b0d10);
+scene.fog = new THREE.Fog(0x0b0d10, 30, 90);
+
+const camera = new THREE.PerspectiveCamera(40, innerWidth/innerHeight, 0.05, 400);
+camera.position.set(8, 6, 14);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+document.body.appendChild(renderer.domElement);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+controls.minDistance = 0.5;
+controls.maxDistance = 200;
+controls.maxPolarAngle = Math.PI * 0.495;
+
+scene.add(new THREE.HemisphereLight(0xbcd2e8, 0x1a2028, 1.7));
+const key = new THREE.DirectionalLight(0xfff4e0, 2.4);
+key.position.set(12, 20, 14);
+key.castShadow = true;
+key.shadow.mapSize.set(2048, 2048);
+key.shadow.bias = -0.0015;
+Object.assign(key.shadow.camera, { left:-40, right:40, top:40, bottom:-40, near:0.5, far:120 });
+key.shadow.camera.updateProjectionMatrix();
+scene.add(key);
+const fill = new THREE.DirectionalLight(0x9fb4cf, 0.9);
+fill.position.set(-14, 9, -10);
+scene.add(fill);
+
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(400, 400),
+  new THREE.MeshStandardMaterial({ color: 0x1b1f25, roughness: 0.98 }));
+ground.rotation.x = -Math.PI/2; ground.receiveShadow = true; scene.add(ground);
+const grid = new THREE.GridHelper(400, 200, 0x2a323d, 0x1e242c);
+grid.material.opacity = 0.4; grid.material.transparent = true; scene.add(grid);
+
+const panel = document.getElementById('panel');
+const toggle = document.getElementById('toggle');
+const chips = [];
+MODELS.forEach((m, i) => {
+  const el = document.createElement('div');
+  el.className = 'chip';
+  el.innerHTML = `<div class="name"><span class="dot" style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${m.color};margin-right:4px;vertical-align:1px"></span>${m.name}</div><div class="meta">載入中…</div>`;
+  el.onclick = () => focus(i);
+  panel.appendChild(el);
+  chips.push({ el, meta: el.querySelector('.meta') });
+});
+
+const loader = new GLTFLoader();
+const roots = new Array(MODELS.length).fill(null);
+const modelsBox = new THREE.Box3();
+let loaded = 0;
+
+const cols = () => (innerWidth/innerHeight < 1 ? 2 : 3);
+
+function place(root, i) {
+  const seen = new Set();
+  let tris = 0;
+  root.traverse((o) => {
+    if (!o.isMesh) return;
+    if (seen.has(o.geometry.uuid)) { o.visible = false; return; }
+    seen.add(o.geometry.uuid);
+    const g = o.geometry;
+    tris += g.index ? g.index.count/3 : (g.attributes.position?.count || 0)/3;
+    o.castShadow = true; o.receiveShadow = true;
+  });
+
+  const b = new THREE.Box3().setFromObject(root);
+  const size = new THREE.Vector3(); b.getSize(size);
+  const s = size.y > 0.01 ? 2.4/size.y : 1;
+  root.scale.setScalar(s);
+  const b2 = new THREE.Box3().setFromObject(root);
+  const c2 = new THREE.Vector3(); b2.getCenter(c2);
+
+  const nc = cols(), nr = Math.ceil(MODELS.length/nc);
+  const col = i % nc, row = Math.floor(i/nc);
+  const x = (col - (nc-1)/2) * 4.6;
+  const z = -(row - (nr-1)/2) * 4.6;
+  root.position.set(x - c2.x, -b2.min.y, z - c2.z);
+  scene.add(root);
+  modelsBox.expandByObject(root);
+  return { tris: Math.round(tris), size };
+}
+
+function frameAll() {
+  if (modelsBox.isEmpty()) return;
+  const center = modelsBox.getCenter(new THREE.Vector3());
+  center.y = Math.max(center.y, 1.0);
+  const portrait = innerWidth/innerHeight < 1;
+  const dir = (portrait ? new THREE.Vector3(0.40,0.62,-0.68)
+                        : new THREE.Vector3(0.24,0.55,0.80)).normalize();
+  const mn = modelsBox.min, mx = modelsBox.max;
+  const corners = [];
+  for (const x of [mn.x,mx.x]) for (const y of [mn.y,mx.y]) for (const z of [mn.z,mx.z])
+    corners.push(new THREE.Vector3(x,y,z));
+  const cam = camera.clone(); cam.aspect = camera.aspect;
+  let lo=0.5, hi=500, best=hi;
+  for (let i=0;i<24;i++){
+    const mid=(lo+hi)/2;
+    cam.position.copy(center).addScaledVector(dir, mid);
+    cam.lookAt(center); cam.updateMatrixWorld(true); cam.updateProjectionMatrix();
+    let ok=true;
+    for (const p of corners){ const v=p.clone().project(cam);
+      if (Math.abs(v.x)>0.95||Math.abs(v.y)>0.90||v.z>1){ ok=false; break; } }
+    if (ok){ best=mid; hi=mid; } else { lo=mid; }
+  }
+  camera.position.copy(center).addScaledVector(dir,best);
+  controls.target.copy(center); controls.update();
+  chips.forEach(c=>c.el.classList.remove('on'));
+}
+
+function focus(i) {
+  const root = roots[i]; if (!root) return;
+  const b = new THREE.Box3().setFromObject(root);
+  const c = b.getCenter(new THREE.Vector3());
+  const size = b.getSize(new THREE.Vector3());
+  const dist = Math.max(size.x,size.y,size.z) * 1.9 + 2.0;
+  const dir = new THREE.Vector3(0.45,0.45,0.77).normalize();
+  controls.target.copy(c);
+  camera.position.copy(c).addScaledVector(dir, dist);
+  controls.update();
+  chips.forEach((ch,j)=>ch.el.classList.toggle('on', j===i));
+  chips[i].el.scrollIntoView({behavior:'smooth', block:'nearest', inline:'center'});
+}
+toggle.onclick = frameAll;
+
+MODELS.forEach((spec, i) => {
+  loader.load(spec.file,
+    (gltf) => {
+      const info = place(gltf.scene, i);
+      roots[i] = gltf.scene;
+      chips[i].meta.textContent = `${info.tris.toLocaleString()} 三角形`;
+      loaded++;
+      if (loaded === MODELS.length) { focus(0); toggle.style.display="block"; }
+    },
+    (ev) => { if (ev.total) chips[i].meta.textContent = `${(ev.loaded/1e6).toFixed(1)}/${(ev.total/1e6).toFixed(1)} MB`; },
+    (err) => { chips[i].meta.textContent = '失敗'; console.error(spec.file, err); }
+  );
+});
+
+addEventListener('resize', () => {
+  camera.aspect = innerWidth/innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+renderer.setAnimationLoop(() => { controls.update(); renderer.render(scene, camera); });
+</script>
+</body>
+</html>

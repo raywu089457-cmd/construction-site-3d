@@ -1,0 +1,13 @@
+# conversion intermediates (1.9 GB of resized-texture copies of the source USD)
+src/
+
+# export scratch
+_frames/
+_export/
+
+# server logs
+_srv.out
+_srv.err
+
+# local helpers
+_measure.html

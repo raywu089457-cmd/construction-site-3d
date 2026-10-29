@@ -1,0 +1,683 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>工地組裝編輯器</title>
+<style>
+  :root{color-scheme:dark}
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0;overflow:hidden}
+  body{background:#0b0d10;color:#e8eaed;font:13px/1.4 system-ui,-apple-system,"Noto Sans TC",sans-serif}
+  canvas{display:block}
+  #left{position:fixed;top:0;left:0;bottom:0;width:196px;background:#101318ee;border-right:1px solid #1e242c;
+    display:flex;flex-direction:column;z-index:10}
+  #left h2{font-size:11px;letter-spacing:.08em;color:#6b7280;margin:10px 10px 6px;text-transform:uppercase}
+  #palette{flex:1;overflow-y:auto;padding:0 8px 8px;display:flex;flex-direction:column;gap:4px}
+  .pitem{display:flex;align-items:center;gap:6px;padding:5px 7px;border-radius:7px;
+    background:#171b21;border:1px solid #222833;cursor:pointer;font-size:11px}
+  .pitem:hover{border-color:#3a4a5e}
+  .pitem.on{border-color:#1f6feb;background:#16202e}
+  .pitem .sw{width:6px;height:6px;border-radius:50%;flex:0 0 auto}
+  #right{position:fixed;top:0;right:0;bottom:0;width:210px;background:#101318ee;border-left:1px solid #1e242c;
+    display:flex;flex-direction:column;z-index:10;padding:10px;gap:8px;overflow-y:auto}
+  #right h3{font-size:11px;letter-spacing:.08em;color:#6b7280;margin:2px 0 0;text-transform:uppercase}
+  .row{display:flex;gap:5px;flex-wrap:wrap}
+  button{background:#171b21;border:1px solid #222833;color:#c7ccd4;border-radius:7px;padding:6px 9px;
+    font-size:11px;font-weight:600;cursor:pointer}
+  button:hover{border-color:#3a4a5e}
+  button.on{border-color:#1f6feb;background:#16202e;color:#fff}
+  button.primary{background:#1f6feb;border-color:#1f6feb;color:#fff}
+  button.danger{border-color:#7a2e2e;color:#f08c7c}
+  #hud{position:fixed;left:210px;right:224px;bottom:8px;display:flex;gap:8px;align-items:center;
+    background:#101318dd;border:1px solid #1e242c;border-radius:9px;padding:7px 10px;z-index:10}
+  #hud input[type=range]{flex:1}
+  #tip{position:fixed;left:210px;top:8px;right:224px;color:#6b7280;font-size:11px;z-index:9}
+  #stat{font-size:11px;color:#8b929c}
+  .k{display:inline-block;background:#222833;border-radius:4px;padding:0 4px;font-family:monospace;color:#c7ccd4}
+</style>
+</head>
+<body>
+<div id="left">
+  <h2>零件庫</h2>
+  <div id="palette"></div>
+</div>
+
+<div id="right">
+  <h3>選取</h3>
+  <div id="selinfo" style="font-size:11px;color:#8b929c;min-height:30px">沒有選取</div>
+  <div class="row">
+    <button id="rotL">↺ 旋轉</button>
+    <button id="rotR">↻ 旋轉</button>
+    <button id="dup">複製</button>
+    <button id="del" class="danger">刪除</button>
+  </div>
+  <h3>階段</h3>
+  <div class="row" id="stages"></div>
+  <h3>工具</h3>
+  <div class="row">
+    <button id="snapToggle" class="on">鎖點 ON</button>
+    <button id="gridToggle" class="on">格線</button>
+  </div>
+  <div class="row">
+    <button id="save">存檔 JSON</button>
+    <button id="load">讀檔</button>
+  </div>
+  <div class="row">
+    <button id="clear" class="danger">清空</button>
+  </div>
+  <h3>鏡頭運鏡</h3>
+  <div id="camkeys" style="display:flex;flex-direction:column;gap:3px"></div>
+  <div class="row"><button id="camReset">重設機位</button></div>
+  <h3>動畫</h3>
+  <div class="row">
+    <button id="play" class="primary">▶ 播放</button>
+    <button id="mp4" class="primary">⬇ 匯出 MP4</button>
+  </div>
+  <div id="recstat" style="font-size:11px;color:#6b7280"></div>
+</div>
+
+<div id="hud">
+  <span class="k">階段</span>
+  <input id="timeline" type="range" min="0" max="6" step="1" value="6">
+  <span id="tlv">6 / 6</span>
+  <span id="stat"></span>
+</div>
+<div id="tip">點零件庫新增 → 拖曳移動 → <span class="k">R</span> 旋轉 <span class="k">Del</span> 刪除 · 靠近鎖點會自動吸附</div>
+
+<script type="importmap">
+{ "imports": { "three": "./vendor/three.module.js", "three/addons/": "./vendor/addons/" } }
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+
+/* ------------------------------------------------------------------ catalog */
+const CATALOG = [
+  { id:'fence_b',   f:'models/fence_b.glb',      label:'網片圍籬 6m', kind:'fence', c:'#8b95a3' },
+  { id:'fence_c',   f:'models/fence_c.glb',      label:'網片圍籬 2m', kind:'fence', c:'#8b95a3' },
+  { id:'gate_s',    f:'models/gate_safety.glb',  label:'安全閘門',    kind:'fence', c:'#f0c53c' },
+  { id:'gate_d',    f:'models/gate_dock.glb',    label:'月台閘門',    kind:'fence', c:'#f0c53c' },
+  { id:'barricade', f:'models/barricade.glb',    label:'注水拒馬',    kind:'prop',  c:'#f2a33c' },
+  { id:'orange',    f:'models/orange.glb',       label:'橘色圍籬',    kind:'fence', c:'#ff6a2b' },
+  { id:'metal',     f:'models/metal.glb',        label:'管狀護欄',    kind:'fence', c:'#e8b53c' },
+  { id:'crate_ply', f:'models/scene/crate_ply.glb', label:'膠合板箱', kind:'stack', c:'#c9a978' },
+  { id:'crate_gry', f:'models/scene/crate_gray.glb',label:'料箱',     kind:'stack', c:'#9aa4b0' },
+  { id:'drum_steel',f:'models/scene/drum_steel.glb',label:'鋼桶',     kind:'stack', c:'#7b8794' },
+  { id:'drum_blue', f:'models/scene/drum_blue.glb', label:'塑膠桶',   kind:'stack', c:'#4a7fd4' },
+  { id:'bucket',    f:'models/scene/bucket_red.glb',label:'水桶',     kind:'stack', c:'#d4524a' },
+  { id:'barrow',    f:'models/scene/wheelbarrow.glb',label:'獨輪車',  kind:'prop',  c:'#7fa06a' },
+  { id:'excavator', f:'models/free/excavator.glb',label:'挖土機',     kind:'prop',  c:'#e8c33c' },
+  { id:'forklift',  f:'models/free/forklift.glb', label:'堆高機',     kind:'prop',  c:'#c9c9c9' },
+  { id:'truck',     f:'models/free/Trucks.glb',   label:'工程車',     kind:'prop',  c:'#8fb8e0' },
+  { id:'office',    f:'models/free/Containers-Office.glb', label:'工務所', kind:'prop', c:'#c8cfd6' },
+  { id:'container', f:'models/free/Containers.glb',label:'貨櫃',      kind:'prop',  c:'#8fa4b8' },
+  { id:'materials', f:'models/free/Construction-Materials.glb', label:'材料堆', kind:'prop', c:'#b98f5e' },
+  { id:'ph_cement',  f:'models/ph/cement_bag.glb',            label:'水泥袋',   kind:'stack', c:'#c8b89a' },
+  { id:'ph_barrier', f:'models/ph/concrete_road_barrier.glb', label:'混凝土護欄', kind:'fence', c:'#b8b8b8' },
+  { id:'ph_ladder',  f:'models/ph/wooden_ladder.glb',         label:'木梯',     kind:'prop',  c:'#c09a63' },
+  { id:'ph_pipes',   f:'models/ph/modular_pipes.glb',         label:'鋼管組',   kind:'prop',  c:'#9aa4b0' },
+  { id:'ph_crate',   f:'models/ph/plastic_crate_01.glb',      label:'塑膠箱',   kind:'stack', c:'#4a7fd4' },
+  { id:'ph_barrel',  f:'models/ph/barrel_03.glb',             label:'鐵桶',     kind:'stack', c:'#7b8794' },
+  { id:'ph_stone',   f:'models/ph/stone_01.glb',              label:'石塊',     kind:'prop',  c:'#8b8b8b' },
+  { id:'building',  f:'models/free/Building.glb', label:'施工大樓',   kind:'prop',  c:'#b9bcc0' },
+  { id:'crane',     f:'models/free/Crane-On-Ground.glb', label:'塔吊',kind:'prop',  c:'#f0d24a' },
+];
+
+/* ------------------------------------------------------------------- scene */
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0b0d10);
+const camera = new THREE.PerspectiveCamera(45, innerWidth/innerHeight, 0.1, 1200);
+const renderer = new THREE.WebGLRenderer({ antialias:true, preserveDrawingBuffer:true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+document.body.appendChild(renderer.domElement);
+renderer.domElement.style.position = 'fixed';
+renderer.domElement.style.left = '196px';
+renderer.domElement.style.top = '0';
+renderer.setSize(innerWidth - 196 - 210, innerHeight);
+camera.aspect = (innerWidth-196-210)/innerHeight;
+camera.updateProjectionMatrix();
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.maxPolarAngle = Math.PI*0.49;
+controls.minDistance = 2; controls.maxDistance = 400;
+camera.position.set(26, 17, 30);
+controls.target.set(0, 1.5, 0);
+
+scene.add(new THREE.HemisphereLight(0xc2d8ee, 0x1b222b, 1.5));
+const sun = new THREE.DirectionalLight(0xfff2dd, 2.4);
+sun.position.set(60, 90, 50); sun.castShadow = true;
+sun.shadow.mapSize.set(2048,2048); sun.shadow.bias = -0.0015;
+Object.assign(sun.shadow.camera, { left:-90, right:90, top:90, bottom:-90, near:1, far:400 });
+sun.shadow.camera.updateProjectionMatrix();
+scene.add(sun);
+
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(240,240),
+  new THREE.MeshStandardMaterial({ color:0x3b424c, roughness:0.96 }));
+ground.rotation.x = -Math.PI/2;
+ground.receiveShadow = true;
+scene.add(ground);
+const grid = new THREE.GridHelper(240, 120, 0x3a4653, 0x252c35);
+grid.position.y = 0.01; grid.material.opacity = 0.5; grid.material.transparent = true;
+scene.add(grid);
+
+/* ------------------------------------------------------------------ sockets */
+const V3 = (x,y,z) => new THREE.Vector3(x,y,z);
+const SNAP_R = 2.2;              // metres
+
+function deriveSockets(rec) {
+  // rec.box is the normalised bbox (origin at bottom-centre)
+  const s = rec.size;
+  const out = [{ id:'ground', at:V3(0,0,0), dir:V3(0,-1,0), kind:'ground' }];
+  // fences run along whichever horizontal axis is longer — fence_b is 2.04 x 6.03
+  // with the long side on Z, so testing only X produced no end sockets at all
+  const alongX = s.x >= s.z;
+  const long = (alongX ? s.x : s.z) > (alongX ? s.z : s.x) * 1.35;
+  if (long) {
+    const h = (alongX ? s.x : s.z) / 2;
+    if (alongX) {
+      out.push({ id:'endL', at:V3(-h, s.y*0.55, 0), dir:V3(-1,0,0), kind:'end' });
+      out.push({ id:'endR', at:V3( h, s.y*0.55, 0), dir:V3( 1,0,0), kind:'end' });
+    } else {
+      out.push({ id:'endL', at:V3(0, s.y*0.55, -h), dir:V3(0,0,-1), kind:'end' });
+      out.push({ id:'endR', at:V3(0, s.y*0.55,  h), dir:V3(0,0, 1), kind:'end' });
+    }
+  }
+  if (s.y < 1.6 || rec.kind === 'stack') {
+    out.push({ id:'top', at:V3(0, s.y, 0), dir:V3(0,1,0), kind:'top' });
+  }
+  return out;
+}
+
+/* -------------------------------------------------------------------- state */
+const parts = [];              // { uid, catId, obj, size, sockets, stage }
+let selectedId = null;
+let activeCat = null;
+let snapOn = true;
+let maxStage = 6;
+let currentStage = 6;
+const STAGE_SEC = 1.0;      // one stage = intro + hold
+const INTRO = 0.55;         // appearance window inside a stage
+let camKeys = [];           // [{stage,pos[3],tgt[3]}]
+let busy = false;           // playing/exporting: the timeline owns the camera
+
+const loader = new GLTFLoader();
+const templates = new Map();    // catId -> { scene, size }
+let loadPending = CATALOG.length;
+
+CATALOG.forEach(cat => {
+  loader.load(cat.f, (g) => {
+    // normalise: origin -> bottom centre, and drop duplicate nodes
+    const root = new THREE.Group();
+    const seen = new Set();
+    g.scene.updateMatrixWorld(true);
+    const bb = new THREE.Box3().setFromObject(g.scene);
+    const c = bb.getCenter(new THREE.Vector3());
+    g.scene.position.sub(new THREE.Vector3(c.x, bb.min.y, c.z));
+    const inner = new THREE.Group();
+    inner.add(g.scene);
+    g.scene.traverse(o => {
+      if (!o.isMesh) return;
+      if (seen.has(o.geometry.uuid)) { o.visible = false; return; }
+      seen.add(o.geometry.uuid);
+      o.castShadow = true; o.receiveShadow = true;
+    });
+    root.add(inner);
+    root.updateMatrixWorld(true);
+    const bb2 = new THREE.Box3().setFromObject(root);
+    const size = bb2.getSize(new THREE.Vector3());
+    templates.set(cat.id, { proto: root, size });
+    if (--loadPending === 0) boot();
+  }, undefined, (e) => { console.error('load fail', cat.f, e); if (--loadPending === 0) boot(); });
+});
+
+function boot() {
+  buildPalette();
+  buildStageButtons();
+  buildCamKeys();
+  applyTimeline(maxStage);
+  window.__ready = true;
+}
+
+/* ---------------------------------------------------------------- palette UI */
+function buildPalette() {
+  const wrap = document.getElementById('palette');
+  CATALOG.forEach(cat => {
+    const el = document.createElement('div');
+    el.className = 'pitem';
+    el.innerHTML = `<span class="sw" style="background:${cat.c}"></span>${cat.label}`;
+    el.onclick = () => {
+      activeCat = cat.id;
+      document.querySelectorAll('.pitem').forEach(x => x.classList.remove('on'));
+      el.classList.add('on');
+      spawn(cat.id, spawnPoint());
+    };
+    wrap.appendChild(el);
+  });
+}
+
+function buildStageButtons() {
+  const wrap = document.getElementById('stages');
+  for (let i = 1; i <= maxStage; i++) {
+    const b = document.createElement('button');
+    b.textContent = i;
+    b.onclick = () => {
+      const rec = selected();
+      if (!rec) return toast('先選一個零件');
+      rec.stage = i;
+      applyTimeline(currentStage);
+      refreshSel();
+    };
+    wrap.appendChild(b);
+  }
+}
+
+// new parts appear in front of the camera, not in a fixed line
+function spawnPoint() {
+  const t = controls.target.clone();
+  const dir = new THREE.Vector3().subVectors(camera.position, t).setY(0).normalize();
+  return t.addScaledVector(dir, 4).setY(0);
+}
+
+/* -------------------------------------------------------------- spawn / edit */
+let uidSeq = 0;
+function spawn(catId, at, stage) {
+  const tpl = templates.get(catId);
+  if (!tpl) return;
+  const cat = CATALOG.find(c => c.id === catId);
+  const obj = tpl.proto.clone(true);
+  obj.position.copy(at);
+  obj.userData = { catId, sockets: null };
+  const rec = {
+    uid: 'p' + (++uidSeq),
+    catId,
+    obj,
+    size: tpl.size.clone(),
+    stage: stage || 1,
+  };
+  rec.sockets = deriveSockets({ size: rec.size, kind: cat.kind });
+  obj.userData.rec = rec;
+  scene.add(obj);
+  parts.push(rec);
+  select(rec.uid);
+  applyTimeline(currentStage);
+  return rec;
+}
+
+function selected() { return parts.find(p => p.uid === selectedId) || null; }
+
+function select(uid) {
+  selectedId = uid;
+  refreshSel();
+}
+
+function refreshSel() {
+  const rec = selected();
+  const el = document.getElementById('selinfo');
+  if (!rec) { el.textContent = '沒有選取'; return; }
+  const cat = CATALOG.find(c => c.id === rec.catId);
+  el.innerHTML = `<b>${cat.label}</b><br>階段 ${rec.stage}<br>位置 ${rec.obj.position.x.toFixed(1)}, ${rec.obj.position.z.toFixed(1)}<br>旋轉 ${Math.round(THREE.MathUtils.radToDeg(rec.obj.rotation.y))}°`;
+  updateOutline();
+}
+
+let outline = null;
+function updateOutline() {
+  if (outline) { scene.remove(outline); outline = null; }
+  const rec = selected();
+  if (!rec) return;
+  const g = new THREE.BoxHelper(rec.obj, 0x1f6feb);
+  g.material.depthTest = false;
+  outline = g;
+  scene.add(g);
+}
+
+/* ------------------------------------------------------------------ timeline */
+function applyTimeline(t) {
+  currentStage = t;
+  parts.forEach(r => { r.obj.visible = r.stage <= t; });
+  document.getElementById('tlv').textContent = `${t} / ${maxStage}`;
+  document.getElementById('timeline').value = t;
+  const n = parts.filter(r => r.stage <= t).length;
+  document.getElementById('stat').textContent = `${n} / ${parts.length} 個零件`;
+}
+document.getElementById('timeline').oninput = (e) => applyTimeline(+e.target.value);
+
+/* --------------------------------------------------------------- interaction */
+const ray = new THREE.Raycaster();
+const ptr = new THREE.Vector2();
+const plane = new THREE.Plane(V3(0,1,0), 0);
+let dragging = null, dragOff = new THREE.Vector3(), pointerDownAt = 0;
+
+function setPtr(ev) {
+  const r = renderer.domElement.getBoundingClientRect();
+  ptr.x = ((ev.clientX - r.left) / r.width) * 2 - 1;
+  ptr.y = -((ev.clientY - r.top) / r.height) * 2 + 1;
+}
+function pickPart() {
+  ray.setFromCamera(ptr, camera);
+  const hits = ray.intersectObjects(parts.filter(p=>p.obj.visible).map(p=>p.obj), true);
+  if (!hits.length) return null;
+  let o = hits[0].object;
+  while (o && !o.userData.rec) o = o.parent;
+  return o ? o.userData.rec : null;
+}
+function planePoint() {
+  ray.setFromCamera(ptr, camera);
+  const p = new THREE.Vector3();
+  return ray.ray.intersectPlane(plane, p) ? p : null;
+}
+
+renderer.domElement.addEventListener('pointerdown', (ev) => {
+  setPtr(ev); pointerDownAt = performance.now();
+  const rec = pickPart();
+  if (rec) {
+    select(rec.uid);
+    dragging = rec;
+    const p = planePoint();
+    if (p) dragOff.copy(rec.obj.position).sub(p).setY(0);
+    controls.enabled = false;
+  } else {
+    select(null);
+  }
+});
+
+renderer.domElement.addEventListener('pointermove', (ev) => {
+  if (!dragging) return;
+  setPtr(ev);
+  const p = planePoint();
+  if (!p) return;
+  dragging.obj.position.set(p.x + dragOff.x, 0, p.z + dragOff.z);
+  snapPositions(dragging);
+  updateOutline();
+});
+
+renderer.domElement.addEventListener('pointerup', () => {
+  if (dragging) { dragging = null; controls.enabled = true; refreshSel(); }
+});
+
+/* --------------------------------------------------------------- snap engine */
+function worldSocket(rec, socket) {
+  const v = socket.at.clone();
+  v.applyAxisAngle(V3(0,1,0), rec.obj.rotation.y);
+  return v.add(rec.obj.position);
+}
+
+const PAIR = { endL:'endR', endR:'endL', ground:'top' };
+
+function snapPositions(mover) {
+  if (!snapOn) return;
+  let best = null;
+  for (const other of parts) {
+    if (other === mover || !other.obj.visible) continue;
+    for (const so of other.sockets) {
+      if (so.kind !== 'top' && so.kind !== 'end') continue;
+      const target = worldSocket(other, so);
+      for (const sm of mover.sockets) {
+        if (PAIR[sm.id] !== so.id) continue;
+        const cur = worldSocket(mover, sm);
+        const d = cur.distanceTo(target);
+        if (d < SNAP_R && (!best || d < best.d)) best = { d, target, sm, other, so };
+      }
+    }
+  }
+  if (!best) return;
+  // align: mover rotation follows the host for end-to-end and stacking
+  mover.obj.rotation.y = best.other.obj.rotation.y;
+  const local = best.sm.at.clone().applyAxisAngle(V3(0,1,0), mover.obj.rotation.y);
+  mover.obj.position.set(best.target.x - local.x, Math.max(0, best.target.y - local.y), best.target.z - local.z);
+  if (best.so.kind === 'top') mover.obj.position.y = best.target.y;
+}
+
+/* -------------------------------------------------------------- hotkeys etc */
+addEventListener('keydown', (e) => {
+  const rec = selected();
+  if (!rec) return;
+  if (e.key === 'r' || e.key === 'R') { rec.obj.rotation.y += Math.PI/12; updateOutline(); refreshSel(); }
+  if (e.key === 'Delete' || e.key === 'Backspace') { remove(rec); }
+});
+
+function remove(rec) {
+  scene.remove(rec.obj);
+  parts.splice(parts.indexOf(rec), 1);
+  if (selectedId === rec.uid) select(null);
+  applyTimeline(currentStage);
+}
+
+document.getElementById('rotL').onclick = () => { const r=selected(); if(r){r.obj.rotation.y -= Math.PI/12; updateOutline(); refreshSel();} };
+document.getElementById('rotR').onclick = () => { const r=selected(); if(r){r.obj.rotation.y += Math.PI/12; updateOutline(); refreshSel();} };
+document.getElementById('del').onclick   = () => { const r=selected(); if(r) remove(r); };
+document.getElementById('dup').onclick  = () => {
+  const r = selected(); if (!r) return;
+  const n = spawn(r.catId, r.obj.position.clone().add(V3(3,0,0)), r.stage);
+  n.obj.rotation.y = r.obj.rotation.y;
+};
+document.getElementById('snapToggle').onclick = (e) => {
+  snapOn = !snapOn; e.target.classList.toggle('on', snapOn);
+  e.target.textContent = snapOn ? '鎖點 ON' : '鎖點 OFF';
+};
+document.getElementById('gridToggle').onclick = (e) => {
+  grid.visible = !grid.visible; e.target.classList.toggle('on', grid.visible);
+};
+document.getElementById('clear').onclick = () => {
+  if (!confirm('清空全部零件？')) return;
+  parts.forEach(p => scene.remove(p.obj));
+  parts.length = 0; select(null); applyTimeline(currentStage);
+};
+
+/* --------------------------------------------------------------- save / load */
+document.getElementById('save').onclick = () => {
+  const doc = {
+    version: 1,
+    stages: maxStage,
+    camera: camKeys,
+    parts: parts.map(r => ({
+      cat: r.catId, stage: r.stage,
+      p: [ +r.obj.position.x.toFixed(3), +r.obj.position.y.toFixed(3), +r.obj.position.z.toFixed(3) ],
+      ry: +r.obj.rotation.y.toFixed(4),
+    })),
+  };
+  const blob = new Blob([JSON.stringify(doc, null, 2)], { type:'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'site-layout.json';
+  a.click();
+};
+
+document.getElementById('load').onclick = () => {
+  const inp = document.createElement('input');
+  inp.type = 'file'; inp.accept = '.json';
+  inp.onchange = async () => {
+    const txt = await inp.files[0].text();
+    const doc = JSON.parse(txt);
+    parts.forEach(p => scene.remove(p.obj));
+    parts.length = 0;
+    maxStage = doc.stages || 6;
+    camKeys = (doc.camera || []).slice().sort((a,b)=>a.stage-b.stage);
+    buildCamKeys();
+    (doc.parts || []).forEach(d => {
+      const rec = spawn(d.cat, V3(d.p[0], d.p[1], d.p[2]), d.stage);
+      if (rec) rec.obj.rotation.y = d.ry || 0;
+    });
+    applyTimeline(maxStage);
+  };
+  inp.click();
+};
+
+/* ------------------------------------------------------------------ playback */
+const easeOut = (x) => 1 - Math.pow(1 - x, 3);
+const smooth = (x) => x * x * (3 - 2 * x);
+
+function pushCamKey(stage) {
+  camKeys = camKeys.filter(k => k.stage !== stage);
+  camKeys.push({
+    stage,
+    pos: [camera.position.x, camera.position.y, camera.position.z],
+    tgt: [controls.target.x, controls.target.y, controls.target.z],
+  });
+  camKeys.sort((a, b) => a.stage - b.stage);
+  buildCamKeys();
+}
+
+function buildCamKeys() {
+  const wrap = document.getElementById('camkeys');
+  if (!wrap) return;
+  wrap.innerHTML = '';
+  if (!camKeys.length) {
+    wrap.innerHTML = '<div style="font-size:11px;color:#6b7280">還沒有機位。調好角度後按下面數字捕捉。</div>';
+  }
+  camKeys.forEach(k => {
+    const row = document.createElement('div');
+    row.className = 'row';
+    row.innerHTML = '<button style="flex:1">階段 ' + k.stage + ' 機位</button>' +
+                    '<button class="danger" style="padding:6px 7px">×</button>';
+    const bs = row.querySelectorAll('button');
+    bs[0].onclick = () => {
+      controls.target.set(k.tgt[0], k.tgt[1], k.tgt[2]);
+      camera.position.set(k.pos[0], k.pos[1], k.pos[2]);
+      controls.update();
+    };
+    bs[1].onclick = () => { camKeys = camKeys.filter(x => x.stage !== k.stage); buildCamKeys(); };
+    wrap.appendChild(row);
+  });
+  const row = document.createElement('div');
+  row.className = 'row';
+  for (let i = 1; i <= maxStage; i++) {
+    const b = document.createElement('button');
+    b.textContent = i;
+    b.title = '把目前機位記為階段 ' + i;
+    b.onclick = () => pushCamKey(i);
+    row.appendChild(b);
+  }
+  wrap.appendChild(row);
+}
+
+function cameraAt(stageF) {
+  if (!camKeys.length) return;
+  let a = camKeys[0], b = camKeys[camKeys.length - 1];
+  for (const k of camKeys) if (k.stage <= stageF) a = k;
+  for (let i = camKeys.length - 1; i >= 0; i--) if (camKeys[i].stage >= stageF) b = camKeys[i];
+  const span = b.stage - a.stage;
+  const u = span > 0 ? smooth(Math.min(1, Math.max(0, (stageF - a.stage) / span))) : 0;
+  controls.target.set(
+    a.tgt[0] + (b.tgt[0] - a.tgt[0]) * u,
+    a.tgt[1] + (b.tgt[1] - a.tgt[1]) * u,
+    a.tgt[2] + (b.tgt[2] - a.tgt[2]) * u);
+  camera.position.set(
+    a.pos[0] + (b.pos[0] - a.pos[0]) * u,
+    a.pos[1] + (b.pos[1] - a.pos[1]) * u,
+    a.pos[2] + (b.pos[2] - a.pos[2]) * u);
+  camera.lookAt(controls.target);
+}
+
+// pure function of time -> scene state; the exported video matches playback
+function renderAt(t) {
+  const stageF = Math.min(maxStage, Math.max(1, t / STAGE_SEC));
+  const s = Math.min(maxStage, Math.floor(t / STAGE_SEC) + 1);
+  const u = easeOut(Math.min(1, (t - (s - 1) * STAGE_SEC) / INTRO));
+  parts.forEach(p => {
+    if (p.stage < s) { p.obj.visible = true; p.obj.scale.setScalar(1); p.obj.position.y = 0; }
+    else if (p.stage > s) { p.obj.visible = false; }
+    else {
+      p.obj.visible = true;
+      p.obj.scale.setScalar(0.001 + u * 0.999);
+      p.obj.position.y = 0.6 * (1 - u);
+    }
+  });
+  if (outline) outline.visible = false;   // never bake the selection box into the video
+  cameraAt(stageF);
+  const shown = parts.filter(p => p.stage <= s).length;
+  document.getElementById('stat').textContent =
+    't=' + t.toFixed(2) + 's · 階段 ' + s + ' · ' + shown + '/' + parts.length;
+  document.getElementById('tlv').textContent = s + ' / ' + maxStage;
+  document.getElementById('timeline').value = s;
+}
+
+function totalSeconds() { return maxStage * STAGE_SEC; }
+
+async function play() {
+  if (busy || !parts.length) return;
+  busy = true; controls.enabled = false;
+  const btn = document.getElementById('play');
+  btn.textContent = '播放中…'; btn.classList.add('on');
+  const t0 = performance.now(), total = totalSeconds();
+  await new Promise(res => {
+    const step = () => {
+      const t = Math.min(total, (performance.now() - t0) / 1000);
+      renderAt(t);
+      renderer.render(scene, camera);
+      if (t < total) requestAnimationFrame(step); else res();
+    };
+    step();
+  });
+  busy = false; controls.enabled = true;
+  btn.textContent = '▶ 播放'; btn.classList.remove('on');
+  applyTimeline(currentStage);
+  updateOutline();
+}
+document.getElementById('play').onclick = play;
+
+/* ---------------------------------------------------------------- MP4 export */
+async function exportMP4() {
+  if (busy || !parts.length) return;
+  const btn = document.getElementById('mp4');
+  const stat = document.getElementById('recstat');
+  const fps = 30, total = totalSeconds(), frames = Math.round(total * fps);
+  busy = true; controls.enabled = false;
+  btn.textContent = '匯出中…'; btn.classList.add('on');
+  try {
+    await fetch('/_export/start', { method: 'POST' });
+    for (let i = 0; i < frames; i++) {
+      renderAt(i / fps);
+      renderer.render(scene, camera);
+      const blob = await new Promise(r => renderer.domElement.toBlob(r, 'image/jpeg', 0.92));
+      await fetch('/_export/frame?i=' + i, { method: 'POST', body: blob,
+        headers: { 'content-type': 'image/jpeg' } });
+      if (i % 10 === 0 || i === frames - 1) stat.textContent = '算圖 ' + (i+1) + '/' + frames + ' 格…';
+    }
+    stat.textContent = 'ffmpeg 編碼中…';
+    const res = await fetch('/_export/finish?fps=' + fps, { method: 'POST' });
+    const j = await res.json();
+    if (!j.ok) throw new Error(j.error || j.stderr || 'encode failed');
+    const mb = (j.last.bytes / 1e6).toFixed(1);
+    stat.innerHTML = '完成 ' + j.last.frames + ' 格 / ' + mb + ' MB（' + j.last.seconds + 's）<br>' +
+      '<a href="/_export/out.mp4" download style="color:#7fb0ff">下載 construction-progress.mp4</a>';
+    const a = document.createElement('a');
+    a.href = '/_export/out.mp4'; a.download = 'construction-progress.mp4'; a.click();
+  } catch (e) {
+    stat.textContent = '匯出失敗：' + (e.message || e);
+  } finally {
+    busy = false; controls.enabled = true;
+    btn.textContent = '⬇ 匯出 MP4'; btn.classList.remove('on');
+    applyTimeline(currentStage);
+  }
+}
+document.getElementById('mp4').onclick = exportMP4;
+
+document.getElementById('camReset').onclick = () => { camKeys = []; buildCamKeys(); };
+
+function toast(msg) {
+  const t = document.getElementById('tip');
+  const old = t.textContent;
+  t.textContent = msg;
+  setTimeout(() => { t.textContent = old; }, 2200);
+}
+
+/* --------------------------------------------------------------------- loop */
+addEventListener('resize', () => {
+  const w = innerWidth - 196 - 210, h = innerHeight;
+  camera.aspect = w / h; camera.updateProjectionMatrix();
+  renderer.setSize(w, h);
+});
+window.__dbg = { camera, controls, get parts(){return parts;}, get camKeys(){return camKeys;}, spawn, snapPositions, applyTimeline, play, renderAt, exportMP4, pushCamKey, setStage(s){maxStage=s;buildCamKeys();} };
+renderer.setAnimationLoop(() => {
+  if (!busy) { controls.update(); if (outline) outline.update(); renderer.render(scene, camera); }
+});
+</script>
+</body>
+</html>
