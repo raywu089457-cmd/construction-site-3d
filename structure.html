@@ -377,20 +377,32 @@ CATS['鋼筋'] = [
       const Lo = Math.min(Math.max(H/6, Math.max(p.b,p.h), 0.45), H/2);
       const S1 = p.s1/100, S2 = p.s2/100;
       const ys=[];
-      for (let y=S1; y<=Lo+1e-6; y+=S1) ys.push(y);
-      for (let y=H-Lo; y<H-1e-6; y+=S1) ys.push(y);
-      for (let y=Lo+S2; y<H-Lo-1e-6; y+=S2) ys.push(y);
-      const a=bx/2, b2=hz/2, hook=Math.max(6*ds,0.06);
-      for (const y of ys.sort((q,w)=>q-w)) {
+      // RC06：第一道箍筋距樓板面 5cm，之後圍束區 @S1、中央區 @S2
+      ys.push(0.05);
+      for (let y=0.05+S1; y<=Lo+1e-6; y+=S1) ys.push(y);
+      for (let y=H-0.05-Lo; y<H-1e-6; y+=S1) ys.push(y);
+      for (let y=Lo+S2; y<H-0.05-Lo-1e-6; y+=S2) ys.push(y);
+      const a=bx/2, b2=hz/2;
+      // 附註：彎鉤延伸 6db 且 ≥7.5cm
+      const hook = Math.max(6*ds, 0.075);
+      // 附註2：每支中間主筋都要有側向支撐，hx ≤ 20cm
+      const needX = bx > 0.20, needZ = hz > 0.20;
+      ys.sort((q,w)=>q-w).forEach((y, idx) => {
         gs.push(barPolyline([
           P( a, y, -b2), P( a, y,  b2), P(-a, y,  b2), P(-a, y, -b2), P( a, y, -b2),
           P( a, y + hook, -b2 + hook), P( a - hook*0.7, y + hook*0.7, -b2 + hook*0.7)
         ], ds/2));
-      }
-      for (let y=S2*2; y<H; y+=S2*4) {
-        if (bx > 0.30) gs.push(barPolyline([ P(-a+0.01, y, 0), P(a-0.01, y, 0) ], ds/2*0.9));
-        if (hz > 0.30) gs.push(barPolyline([ P(0, y, -b2+0.01), P(0, y, b2-0.01) ], ds/2*0.9));
-      }
+        // 繫筋：每道箍筋處配置，135° 與 90° 彎鉤交替（附註1）
+        const up = idx % 2 === 0;
+        const tie = (x1,z1,x2,z2) => {
+          const pts = up
+            ? [ P(x1, y + hook*0.7, z1 + hook*0.7), P(x1, y, z1), P(x2, y, z2), P(x2, y + hook, z2) ]
+            : [ P(x1 + hook*0.7, y, z1), P(x1, y, z1), P(x2, y, z2), P(x2 + hook, y, z2) ];
+          gs.push(barPolyline(pts, ds/2*0.9));
+        };
+        if (needX) tie(-a*0.85, 0, a*0.85, 0);
+        if (needZ) tie(0, -b2*0.85, 0, b2*0.85);
+      });
       return mergeGeometries(gs);
     } },
 
@@ -417,15 +429,20 @@ CATS['鋼筋'] = [
         gs.push(barPolyline([ P(-hL-0.35, yTop+0.35, z), P(-hL-0.35, yTop, z), P(hL+0.35, yTop, z), P(hL+0.35, yTop+0.35, z) ], db/2));
       for (const z of spreadBars(p.nBot, bw))
         gs.push(barPolyline([ P(-hL-0.2, yBot, z), P(hL+0.2, yBot, z) ], db/2));
-      if (p.web === '自動' && p.h >= 0.6) {
+      // RC04：有效梁深 d > 90cm 時，梁腹兩側加梁腰筋 ≧2-#4
+      const dEff = p.h - cov - db/2;
+      if (p.web === '自動' && dEff > 0.90) {
         for (const z of [-bw/2, bw/2])
           gs.push(barPolyline([ P(-hL, p.h*0.5, z), P(hL, p.h*0.5, z) ], REBAR['#4']/2000));
       }
-      const S1 = p.s1/100, S2 = p.s2/100, zone = 2*p.h;
-      const a=bw/2, yc=(yTop+yBot)/2, bh=(yTop-yBot)/2, hook=Math.max(6*ds,0.06);
+      // 附註7：梁端 2h 範圍內閉合箍間距不得超過 15cm
+      const S1 = Math.min(p.s1/100, 0.15), S2 = p.s2/100, zone = 2*p.h;
+      const a=bw/2, yc=(yTop+yBot)/2, bh=(yTop-yBot)/2;
+      const hook = Math.max(6*ds, 0.075);       // 彎鉤 6db 且 ≥7.5cm
       const xs=[];
-      for (let x=-hL+S1; x<=-hL+zone; x+=S1) xs.push(x);
-      for (let x=hL-zone; x<=hL-S1+1e-6; x+=S1) xs.push(x);
+      // 第一道箍筋距柱面 5cm
+      for (let x=-hL+0.05; x<=-hL+zone; x+=S1) xs.push(x);
+      for (let x=hL-0.05; x>=hL-zone-1e-6; x-=S1) xs.push(x);
       for (let x=-hL+zone+S2; x<hL-zone-1e-6; x+=S2) xs.push(x);
       for (const x of xs.sort((q,w)=>q-w)) {
         gs.push(barPolyline([
