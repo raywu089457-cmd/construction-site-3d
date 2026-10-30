@@ -218,6 +218,88 @@ function spreadBars(n, width) {
   return out;
 }
 
+/* ── 續接器（機械式續接）─────────────────────────────────────────────
+   依 RC10：套筒長約 3.5db、外徑約 1.8db，兩端車牙對接；
+   續接器中心距 ≥3db（圍束鋼筋圍束處可 2.5db），錯接 ≥60cm；
+   淨保護層 ≥2db（圍束處 1.5db）。                                          */
+function couplerGeo(db, y, x, z) {
+  const L = 3.5 * db, R = 0.9 * db;
+  const gs = [];
+  gs.push(tube(R, L, x, y, z));                    // 套筒本體
+  gs.push(tube(R * 1.12, L * 0.22, x, y - L * 0.5, z));  // 上下端加厚（螺牙段）
+  gs.push(tube(R * 1.12, L * 0.22, x, y + L * 0.5, z));
+  return gs;
+}
+
+const SPLICE_OPTS = ['續接器', '搭接'];
+
+function buildColBody(p, gs, opts = {}) {
+  const cov = p.cover, db = REBAR[p.main] / 1000, ds = REBAR[p.tie] / 1000;
+  const bx = p.b - cov * 2, hz = p.h - cov * 2, H = p.Hn;
+  const pts = perimeterBars(p.nMain, bx, hz);
+
+  if (p.splice === '續接器') {
+    // 兩段鋼筋 + 套筒；相鄰鋼筋錯接 ≥60cm
+    const base = H / 2;
+    const stagger = Math.max(0.6, 3 * db);
+    pts.forEach(([x, z], i) => {
+      const ySplice = base + (i % 2 ? stagger / 2 : -stagger / 2);
+      const lo = ySplice, up = H + 0.6 - ySplice;
+      gs.push(tube(db / 2, lo, x, lo / 2, z));                       // 下段
+      gs.push(tube(db / 2, up, x, ySplice + up / 2, z));             // 上段
+      gs.push(...couplerGeo(db, ySplice, x, z));                     // 續接器
+    });
+  } else {
+    // 搭接：上端預留 0.6 m 重疊段
+    for (const [x, z] of pts) gs.push(tube(db / 2, H + 0.6, x, (H + 0.6) / 2, z));
+  }
+  return pts;
+}
+
+CATS['續接'] = [
+  { id:'coupler', name:'鋼筋續接器（單一接頭）', unit:'RC10', note:'套筒長 3.5db、外徑 1.8db；兩端車牙對接；中心距 ≥3db、錯接 ≥60cm、淨保護層 ≥2db',
+    p:{ bar:{label:'鋼筋號數',opts:BAROPTS,def:'#7'},
+        gap:{label:'錯接距離 (m)',min:0,max:1.2,step:0.1,def:0.6} },
+    build:p => {
+      const db = REBAR[p.bar]/1000, gs=[];
+      // 垂直鋼筋：下段 + 套筒 + 上段（續接器在 y=0）
+      gs.push(tube(db/2, 1.2, 0, -0.6, 0));
+      gs.push(tube(db/2, 1.2, 0,  0.6, 0));
+      gs.push(...couplerGeo(db, 0, 0, 0));
+      // 旁邊再一支錯開 p.gap 的（示範錯接）
+      gs.push(tube(db/2, 1.2, 0.35, p.gap - 0.6, 0));
+      gs.push(tube(db/2, 1.2, 0.35, p.gap + 0.6, 0));
+      gs.push(...couplerGeo(db, p.gap, 0.35, 0));
+      return mergeGeometries(gs);
+    } },
+
+  { id:'coupler-sect', name:'續接器剖面（錯接示意）', unit:'RC10', note:'同一斷面隔根續接，相鄰續接器中心距 ≥3db；錯接 ≥60cm',
+    p:{ bar:{label:'鋼筋號數',opts:BAROPTS,def:'#7'},
+        n:{label:'每排支數',min:2,max:6,step:1,def:4} },
+    build:p => {
+      const db = REBAR[p.bar]/1000, gs=[];
+      const step = 0.25;
+      for (let i=0;i<p.n;i++) {
+        const z = -step*(p.n-1)/2 + i*step;
+        const yc = (i % 2) ? 0.3 : -0.3;                   // 隔根錯接
+        gs.push(tube(db/2, 2.0, 0, yc, z));                // 整支（視覺上連續）
+        gs.push(...couplerGeo(db, yc, 0, z));              // 續接器位置錯開
+      }
+      return mergeGeometries(gs);
+    } },
+
+  { id:'headed', name:'擴頭鋼筋', unit:'RC10', note:'端部擴頭，可替代 90° 彎鉤；淨保護層 ≥2db、中心距 ≥3db',
+    p:{ bar:{label:'鋼筋號數',opts:BAROPTS,def:'#7'},
+        len:{label:'長度 (m)',min:0.5,max:3,step:0.1,def:1.2} },
+    build:p => {
+      const db = REBAR[p.bar]/1000, gs=[];
+      gs.push(tube(db/2, p.len, 0, p.len/2, 0));
+      const head = new THREE.CylinderGeometry(1.9*db, 1.9*db, 0.6*db, 12);
+      head.translate(0, p.len + 0.3*db, 0); gs.push(head);
+      return mergeGeometries(gs);
+    } },
+];
+
 CATS['鋼筋'] = [
   /* ── 柱配筋（RC06） 標註例：主筋 12-#7、箍筋 #3@10/15、保護層 4cm ── */
   { id:'colrebar', name:'柱配筋（整組）', unit:'RC06', note:'主筋 12-#7 型式；圍束區 Lo=max(Hn/6,最大斷面,45cm) 箍筋@10；中央區@15；135°鉤',
@@ -229,13 +311,13 @@ CATS['鋼筋'] = [
         tie:{label:'箍筋號數',opts:['#3','#4'],def:'#3'},
         s1:{label:'圍束區 @ (cm)',min:7.5,max:15,step:2.5,def:12.5},
         s2:{label:'中央區 @ (cm)',min:10,max:20,step:2.5,def:15},
+        splice:{label:'續接方式',opts:['續接器','搭接'],def:'續接器'},
         cover:{label:'保護層 (m)',min:0.03,max:0.06,step:0.005,def:0.04} },
     build:p => {
       const cov=p.cover, db=REBAR[p.main]/1000, ds=REBAR[p.tie]/1000;
       const bx=p.b-cov*2, hz=p.h-cov*2, H=p.Hn;
       const gs=[];
-      const pts = perimeterBars(p.nMain, bx, hz);
-      for (const [x,z] of pts) gs.push(tube(db/2, H+0.6, x, (H+0.6)/2, z));
+      buildColBody(p, gs);          // 主筋 + 續接器/搭接
       const Lo = Math.min(Math.max(H/6, Math.max(p.b,p.h), 0.45), H/2);
       const S1 = p.s1/100, S2 = p.s2/100;
       const ys=[];
@@ -452,8 +534,13 @@ CATS['樓層'] = [
       for (const sx of [-1,1]) for (const sz of [-1,1]) {
         const cx = sx*bayX/2, cz = sz*bayZ/2;
         const bx = cb-cov*2, hz = cb-cov*2, a=bx/2, b2=hz/2;
-        for (const [dx,dz] of perimeterBars(8, bx, hz))
-          gs.push(tube(db/2, Hn+0.6, cx+dx, (Hn+0.6)/2, cz+dz));
+        const cpts = perimeterBars(8, bx, hz);
+        cpts.forEach(([dx,dz], i) => {
+          const yS = Hn/2 + (i % 2 ? 0.3 : -0.3);
+          gs.push(tube(db/2, yS, cx+dx, yS/2, cz+dz));
+          gs.push(tube(db/2, Hn+0.6-yS, cx+dx, yS + (Hn+0.6-yS)/2, cz+dz));
+          gs.push(...couplerGeo(db, yS, cx+dx, cz+dz));
+        });
         const Lo = Math.min(Math.max(Hn/6, cb, 0.45), Hn/2);
         const ys=[];
         for (let y=0.1; y<=Lo; y+=0.10) ys.push(y);
