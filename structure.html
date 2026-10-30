@@ -148,6 +148,8 @@ function cyl(r,len,x,y,z,axis='y'){
   if(axis==='z') g.rotateX(Math.PI/2);
   g.translate(x,y,z); return g;
 }
+const tube = cyl;   // 別名，鋼筋程式碼用 tube
+
 /* 折彎鋼筋：給一串點，接成圓管（含關節補球） */
 function barPolyline(pts, r) {
   const geos = [];
@@ -178,48 +180,137 @@ const CATS = {};
 
 /* ---------------------------- 鋼筋 -------------------------------------- */
 CATS['鋼筋'] = [
-  { id:'bar', name:'直筋', unit:'主筋 / 板筋', note:'CNS 560 竹節鋼筋，現場常用 9 m 或 12 m 定尺',
+  /* ── 柱配筋（照抄 RC06 柱配筋標準圖） ─────────────────────────────
+     主筋：四角 + 每面依 ≤30 cm 間距增設，保護層 4 cm
+     箍筋：矩形閉合 + 135° 彎鉤；圍束區 Lo = max(Hn/6, 最大斷面, 45 cm) 內 @10 cm
+           中央區 @15 cm；圍束區內不得續接，中央區隔根續接、相距 ≥60 cm     */
+  { id:'colrebar', name:'柱配筋（整組）', unit:'RC06 標準圖', note:'圍束區 Lo=max(Hn/6, 最大斷面, 45cm) 箍筋@10cm；中央區@15cm；保護層 4cm',
+    p:{ b:{label:'柱寬 b (m)',min:0.3,max:1.2,step:0.05,def:0.5},
+        h:{label:'柱深 h (m)',min:0.3,max:1.2,step:0.05,def:0.5},
+        Hn:{label:'柱淨高 Hn (m)',min:1.5,max:5,step:0.1,def:3.0},
+        main:{label:'主筋',opts:['#5','#6','#7','#8'],def:'#7'},
+        tie:{label:'箍筋',opts:['#3','#4'],def:'#3'},
+        cover:{label:'保護層 (m)',min:0.03,max:0.06,step:0.005,def:0.04} },
+    build:p => {
+      const cov=p.cover, db=REBAR[p.main]/1000, ds=REBAR[p.tie]/1000;
+      const bx=p.b-cov*2, hz=p.h-cov*2, H=p.Hn;
+      const gs=[];
+      // 主筋：四角 + 每面中間（間距 >30cm 時）
+      const xs=[-bx/2, bx/2], zs=[-hz/2, hz/2];
+      if (bx > 0.32) xs.splice(1,0,0);
+      if (hz > 0.32) zs.splice(1,0,0);
+      const mainPts=[];
+      for (const x of xs) for (const z of zs) if (Math.abs(x)===bx/2 || Math.abs(z)===hz/2) mainPts.push([x,z]);
+      for (const [x,z] of mainPts) gs.push(tube(db/2, H+0.6, x, (H+0.6)/2, z));  // 上端預留搭接
+      // 箍筋：圍束區 Lo 上下 @S1，中央 @S2
+      const Lo = Math.max(H/6, Math.max(p.b,p.h), 0.45);
+      const S1 = Math.min(p.h/4, 8*db, 24*ds, 0.30);   // 圍束區
+      const S2 = Math.min(p.h/2, 0.30);                // 中央區（標準圖上限；現場常 15cm）
+      const ySet=[];
+      for (let y=S1; y<=Math.min(Lo,H); y+=S1) ySet.push(y);
+      for (let y=H-Lo+S1; y<H; y+=S1) if (y>Lo) ySet.push(y);
+      for (let y=Lo+S2; y<H-Lo; y+=S2) ySet.push(y);
+      const a=bx/2, b2=hz/2, hook=Math.max(6*ds,0.06);
+      for (const y of ySet.sort((q,w)=>q-w)) {
+        // 矩形閉合箍（水平面：固定 y，繞 x/z）
+        gs.push(barPolyline([
+          P( a, y, -b2), P( a, y,  b2), P(-a, y,  b2), P(-a, y, -b2), P( a, y, -b2),
+          P( a, y + hook, -b2 + hook), P( a - hook*0.7, y + hook*0.7, -b2 + hook*0.7)
+        ], ds/2));
+      }
+      // 繫筋（同一水平面，勾住對面主筋）
+      for (let y=S2*2; y<H; y+=S2*4) {
+        if (bx > 0.32) gs.push(barPolyline([ P(-a+0.01, y, 0), P(a-0.01, y, 0) ], ds/2*0.9));
+        if (hz > 0.32) gs.push(barPolyline([ P(0, y, -b2+0.01), P(0, y, b2-0.01) ], ds/2*0.9));
+      }
+      return mergeGeometries(gs);
+    } },
+
+  /* ── 樑配筋（照抄 RC04 梁配筋標準圖） ─────────────────────────────
+     上層主筋至少 2 支通達支承；樑深 ≥60 cm 加腰筋 2-#13
+     箍筋：支承面起 2h 內 S1=min(h/4, 8db, 24ds, 30cm)，中央 S2=min(h/2,30cm)
+     端部 90° 標準彎鉤錨定 Ldh                                          */
+  { id:'beamrebar', name:'樑配筋（整組）', unit:'RC04 標準圖', note:'上層≥2支通達支承；箍筋端部 S1=min(h/4,8db,24ds,30cm) 範圍 2h；中央 S2=min(h/2,30cm)；樑深≥60cm 加腰筋',
+    p:{ bw:{label:'樑寬 (m)',min:0.25,max:0.8,step:0.05,def:0.4},
+        h:{label:'樑深 (m)',min:0.4,max:1.2,step:0.05,def:0.7},
+        Ln:{label:'淨跨 (m)',min:2,max:10,step:0.5,def:6},
+        main:{label:'主筋',opts:['#5','#6','#7','#8'],def:'#7'},
+        tie:{label:'箍筋',opts:['#3','#4'],def:'#3'},
+        cover:{label:'保護層 (m)',min:0.03,max:0.06,step:0.005,def:0.04} },
+    build:p => {
+      const cov=p.cover, db=REBAR[p.main]/1000, ds=REBAR[p.tie]/1000;
+      const bw=p.bw-cov*2, hh=p.h-cov*2, L=p.Ln, hL=L/2;
+      const gs=[];
+      const yTop = p.h - cov - db/2;
+      const yBot = cov + db/2;
+      // 上層 2 支 + 下層 2 支（通長）
+      for (const z of [-bw/2, bw/2]) {
+        // 上層：兩端 90° 彎鉤錨入柱
+        gs.push(barPolyline([ P(-hL-0.3, yTop+0.35), P(-hL-0.3, yTop), P(hL+0.3, yTop), P(hL+0.3, yTop+0.35) ], db/2));
+        gs.push(barPolyline([ P(-hL, yBot), P(hL, yBot) ], db/2));
+      }
+      // 腰筋（樑深 ≥ 60cm）
+      if (p.h >= 0.6) {
+        for (const z of [-bw/2, bw/2]) gs.push(barPolyline([ P(-hL, p.h/2), P(hL, p.h/2) ], REBAR['#4']/2000));
+      }
+      // 箍筋：兩端 2h 範圍 S1，中央 S2
+      const S1 = Math.min(p.h/4, 8*db, 24*ds, 0.30);
+      const S2 = Math.min(p.h/2, 0.30);
+      const ys=[];
+      for (let x=-hL; x<=hL; x+=S1) { if (Math.abs(x)<=2*p.h) ys.push(x); }
+      for (let x=-hL+2*p.h; x<hL-2*p.h; x+=S2) ys.push(x);
+      const a=bw/2, b2=hh/2, hook=Math.max(6*ds,0.06);
+      for (const x of ys.sort((q,w)=>q-w)) {
+        gs.push(barPolyline([ P(x,yBot,-a), P(x,yTop,-a), P(x,yTop,a), P(x,yBot,a), P(x,yBot,-a),
+                              P(x,yBot+hook,-a), P(x,yBot+hook*0.7,-a+hook*0.7) ], ds/2));
+      }
+      return mergeGeometries(gs);
+    } },
+
+  /* ── 板配筋（照抄 RC07/RC08 板配筋標準圖） ───────────────────────
+     下層雙向 @15 cm；上層筋於支承處延伸 0.25L；板筋錨定 Ld，支承處 ≥15 cm
+     保護層 2 cm；板內管路 ≤ 版厚/3，間距 ≥2 倍管徑                        */
+  { id:'slabrebar', name:'板配筋（整組）', unit:'RC07/RC08 標準圖', note:'下層雙向@15cm；上層筋支承處延伸 0.25L；錨定 Ld、支承處≥15cm；保護層 2cm',
+    p:{ L:{label:'版長 (m)',min:1.5,max:8,step:0.5,def:4},
+        W:{label:'版寬 (m)',min:1.5,max:8,step:0.5,def:4},
+        t:{label:'版厚 (m)',min:0.1,max:0.3,step:0.01,def:0.15},
+        bar:{label:'鋼筋',opts:['#3','#4','#5'],def:'#4'},
+        space:{label:'間距 (m)',min:0.1,max:0.25,step:0.01,def:0.15},
+        cover:{label:'保護層 (m)',min:0.015,max:0.04,step:0.005,def:0.02} },
+    build:p => {
+      const r=REBAR[p.bar]/2000, cov=p.cover, L=p.L, W=p.W, t=p.t;
+      const gs=[];
+      const yBot = cov + r, yTop = t - cov - r;
+      const ext = 0.25 * Math.min(L,W);   // 上層筋延伸 0.25L
+      // 下層雙向
+      for (let z=-W/2+cov; z<=W/2-cov+1e-6; z+=p.space) gs.push(tube(r, L-2*cov, 0, yBot, z, 'x'));
+      for (let x=-L/2+cov; x<=L/2-cov+1e-6; x+=p.space) gs.push(tube(r, W-2*cov, x, yBot, 0, 'z'));
+      // 上層筋：兩端各延伸 0.25L（支承負彎矩筋）
+      for (let z=-W/2+cov; z<=W/2-cov+1e-6; z+=p.space*2) {
+        gs.push(tube(r, ext, -L/2+cov+ext/2, yTop, z, 'x'));
+        gs.push(tube(r, ext,  L/2-cov-ext/2, yTop, z, 'x'));
+      }
+      return mergeGeometries(gs);
+    } },
+
+  { id:'bar', name:'直筋', unit:'單支', note:'CNS 560 竹節鋼筋，現場常用 9 m 或 12 m 定尺',
     p:{ bar:{label:'號數',opts:['#3','#4','#5','#6','#7','#8'],def:'#6'},
         len:{label:'長度 (m)',min:0.5,max:6,step:0.1,def:2.0} },
     build:p => barPolyline([P(-p.len/2,0), P(p.len/2,0)], REBAR[p.bar]/2000) },
 
-  { id:'barL', name:'L 形彎筋', unit:'錨定 / 角隅', note:'90° 彎折，錨定長度依設計（常 40d 以上）',
-    p:{ bar:{label:'號數',opts:['#3','#4','#5','#6','#7','#8'],def:'#6'},
-        a:{label:'長邊 (m)',min:0.3,max:3,step:0.1,def:1.2},
-        b:{label:'短邊 (m)',min:0.1,max:1.5,step:0.05,def:0.4} },
-    build:p => { const r=REBAR[p.bar]/2000;
-      return barPolyline([P(-p.a/2,0), P(p.a/2,0), P(p.a/2,p.b)], r); } },
-
-  { id:'barU', name:'U 形筋', unit:'樑端 / 開口補強', note:'兩端 90° 向上，開口補強常用',
-    p:{ bar:{label:'號數',opts:['#3','#4','#5','#6','#7','#8'],def:'#5'},
-        w:{label:'寬 (m)',min:0.1,max:1.2,step:0.05,def:0.5},
-        h:{label:'高 (m)',min:0.1,max:1.2,step:0.05,def:0.4} },
-    build:p => { const r=REBAR[p.bar]/2000;
-      return barPolyline([P(-p.w/2,0), P(-p.w/2,p.h), P(p.w/2,p.h), P(p.w/2,0)], r); } },
-
-  { id:'stirrup', name:'方箍（閉合箍筋）', unit:'柱箍筋 #3', note:'閉合箍 + 135° 彎鉤，鉤長 6d；間距常 15 cm',
+  { id:'stirrup', name:'方箍（閉合箍筋）', unit:'柱箍筋', note:'閉合箍 + 135° 彎鉤，鉤長 6d',
     p:{ bar:{label:'箍筋號數',opts:['#3','#4'],def:'#3'},
-        w:{label:'柱寬-保護層 (m)',min:0.15,max:1.1,step:0.05,def:0.32},
-        h:{label:'柱深-保護層 (m)',min:0.15,max:1.1,step:0.05,def:0.32} },
+        w:{label:'柱寬-保護層 (m)',min:0.15,max:1.1,step:0.05,def:0.42},
+        h:{label:'柱深-保護層 (m)',min:0.15,max:1.1,step:0.05,def:0.42} },
     build:p => { const r=REBAR[p.bar]/2000, hook=Math.max(6*REBAR[p.bar]/1000,0.06);
       const a=p.w/2, b=p.h/2;
-      const pts = [ P(a,-b), P(a,b), P(-a,b), P(-a,-b), P(a,-b), P(a,-b+hook), P(a+hook*0.7,-b+hook*0.7) ];
-      return barPolyline(pts, r); } },
+      return barPolyline([ P(a,-b), P(a,b), P(-a,b), P(-a,-b), P(a,-b), P(a,-b+hook), P(a+hook*0.7,-b+hook*0.7) ], r); } },
 
-  { id:'tie', name:'拉筋（繫筋）', unit:'柱、樑側', note:'兩端 135° 彎鉤，鈎住主筋；地震區常全數施作',
+  { id:'tie', name:'拉筋（繫筋）', unit:'柱、樑側', note:'兩端 135° 彎鉤，勾住主筋；地震區全數施作',
     p:{ bar:{label:'號數',opts:['#3','#4'],def:'#3'},
-        len:{label:'長度 (m)',min:0.15,max:1.0,step:0.05,def:0.34} },
-    build:p => { const r=REBAR[p.bar]/2000, hk=Math.max(6*REBAR[p.bar]/1000,0.06), h=p.len/2;
-      const d=hk*0.707;
-      // 兩端 135° 彎鉤（勾住主筋），像釘書針
+        len:{label:'長度 (m)',min:0.15,max:1.0,step:0.05,def:0.42} },
+    build:p => { const r=REBAR[p.bar]/2000, hk=Math.max(6*REBAR[p.bar]/1000,0.06), h=p.len/2, d=hk*0.707;
       return barPolyline([ P(-h+d, d), P(-h,0), P(h,0), P(h-d, d) ], r); } },
-
-  { id:'slabbar', name:'板筋（兩端彎鉤）', unit:'樓板', note:'兩端 90° 彎鉤，上下層雙向配置；保護層 2 cm',
-    p:{ bar:{label:'號數',opts:['#3','#4','#5'],def:'#4'},
-        len:{label:'長度 (m)',min:0.5,max:5,step:0.1,def:1.6},
-        hook:{label:'彎鉤長 (m)',min:0.03,max:0.3,step:0.01,def:0.08} },
-    build:p => { const r=REBAR[p.bar]/2000, h=p.len/2;
-      return barPolyline([ P(-h,p.hook), P(-h,0), P(h,0), P(h,p.hook) ], r); } },
 
   { id:'chair', name:'撐鐵（椅仔鐵）', unit:'板筋支撐', note:'撐住上層鋼筋，常 1 m 一支',
     p:{ bar:{label:'號數',opts:['#3','#4'],def:'#3'},
@@ -227,16 +318,7 @@ CATS['鋼筋'] = [
     build:p => { const r=REBAR[p.bar]/2000, hh=p.h;
       return barPolyline([ P(-0.15,hh), P(-0.10,0), P(0.10,0), P(0.15,hh) ], r); } },
 
-  { id:'beamstirrup', name:'樑箍（矩形）', unit:'樑', note:'閉合矩形箍 + 135° 鉤；樑寬扣除保護層',
-    p:{ bar:{label:'號數',opts:['#3','#4'],def:'#3'},
-        w:{label:'樑寬-保護層 (m)',min:0.15,max:0.7,step:0.05,def:0.32},
-        h:{label:'樑深-保護層 (m)',min:0.2,max:1.1,step:0.05,def:0.55} },
-    build:p => { const r=REBAR[p.bar]/2000, hook=Math.max(6*REBAR[p.bar]/1000,0.06);
-      const a=p.w/2, b=p.h/2;
-      const pts=[ P(a,-b), P(a,b), P(-a,b), P(-a,-b), P(a,-b), P(a,-b+hook), P(a+hook*0.7,-b+hook*0.7) ];
-      return barPolyline(pts, r); } },
-
-  { id:'lap', name:'搭接段', unit:'續接', note:'搭接長度依設計（常 40d），錯開配置',
+  { id:'lap', name:'搭接段', unit:'續接', note:'搭接長度 = 伸展長度 × 倍數；柱圍束區不得續接，錯接 ≥60 cm',
     p:{ bar:{label:'號數',opts:['#3','#4','#5','#6','#7','#8'],def:'#6'},
         d:{label:'搭接長度 (m)',min:0.2,max:2,step:0.05,def:0.8} },
     build:p => { const r=REBAR[p.bar]/2000, y=r*2.4;
