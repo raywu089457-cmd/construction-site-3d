@@ -70,7 +70,28 @@ const TW = {
   tube:0.0486, rail:0.033, clampTube:0.0486,
   frameW:1.83, frameH:1.90, toe:0.18, railTop:0.90, railMid:0.45,
 };
-const REBAR = { '#3':10, '#4':13, '#5':16, '#6':19, '#7':22, '#8':25 };
+/* CNS 560 A2006 鋼筋標稱直徑（mm）、標稱斷面積（cm²）、單位重（kg/m）
+   —— 用真實標稱值，不是工地口語的四捨五入（#3 是 9.53 不是 10） */
+const REBAR = {
+  '#3': 9.53,  '#4': 12.70, '#5': 15.88, '#6': 19.05,
+  '#7': 22.23, '#8': 25.40, '#9': 28.65, '#10': 32.26, '#11': 35.81,
+};
+const REBAR_INFO = {
+  '#3':  { d:'D10', area:0.7133, kg:0.560 },
+  '#4':  { d:'D13', area:1.267,  kg:0.994 },
+  '#5':  { d:'D16', area:1.986,  kg:1.56  },
+  '#6':  { d:'D19', area:2.865,  kg:2.25  },
+  '#7':  { d:'D22', area:3.871,  kg:3.04  },
+  '#8':  { d:'D25', area:5.067,  kg:3.98  },
+  '#9':  { d:'D29', area:6.424,  kg:5.04  },
+  '#10': { d:'D32', area:8.143,  kg:6.39  },
+  '#11': { d:'D36', area:10.07,  kg:7.91  },
+};
+function barInfo(name) {
+  const mm = REBAR[name], inf = REBAR_INFO[name];
+  if (!mm || !inf) return '';
+  return `${name}（${inf.d}）⌀${mm.toFixed(2)} mm｜斷面積 ${inf.area} cm²｜${inf.kg} kg/m`;
+}
 
 /* ------------------------------------------------------------------ scene */
 const scene = new THREE.Scene();
@@ -180,7 +201,7 @@ const CATS = {};
 
 /* ---------------------------- 鋼筋 -------------------------------------- */
 /* ── 鋼筋：參數照配筋圖標註方式（支數-#號、#號@間距、孔徑 D） ───────── */
-const BAROPTS = ['#3','#4','#5','#6','#7','#8'];
+const BAROPTS = ['#3','#4','#5','#6','#7','#8','#9','#10','#11'];
 
 /* 沿矩形周邊配置 n 支主筋（四角優先，其餘依邊長比例均分） */
 function perimeterBars(n, bx, hz) {
@@ -290,7 +311,8 @@ CATS['續接'] = [
     build:p => {
       const db = REBAR[p.bar]/1000, gs=[];
       const { g, need, big } = couplerSpec(p);
-      p.__color = g.color; p.__spec = `${g.cls}｜抗拉 ${g.tensile}（1.25fy = ${need} kgf/cm²）｜伸長率 ${g.elong}｜取樣 ${g.sample}`;
+      p.__color = g.color;
+      p.__spec = `${barInfo(p.bar)}　▸ ${g.cls}｜抗拉 ${g.tensile}（1.25fy = ${need} kgf/cm²）｜伸長率 ${g.elong}｜取樣 ${g.sample}`;
       // 垂直鋼筋：下段 + 套筒 + 上段（續接器在 y=0）
       gs.push(tube(db/2, 1.2, 0, -0.6, 0));
       gs.push(tube(db/2, 1.2, 0,  0.6, 0));
@@ -350,6 +372,7 @@ CATS['鋼筋'] = [
       const cov=p.cover, db=REBAR[p.main]/1000, ds=REBAR[p.tie]/1000;
       const bx=p.b-cov*2, hz=p.h-cov*2, H=p.Hn;
       const gs=[];
+      p.__spec = `主筋 ${p.nMain}-${p.main}：${barInfo(p.main)}｜箍筋 ${p.tie}：${barInfo(p.tie)}`;
       buildColBody(p, gs);          // 主筋 + 續接器/搭接
       const Lo = Math.min(Math.max(H/6, Math.max(p.b,p.h), 0.45), H/2);
       const S1 = p.s1/100, S2 = p.s2/100;
@@ -389,6 +412,7 @@ CATS['鋼筋'] = [
       const bw=p.bw-cov*2, L=p.Ln, hL=L/2;
       const yTop = p.h - cov - db/2, yBot = cov + db/2;
       const gs=[];
+      p.__spec = `上層 ${p.nTop}-${p.main}、下層 ${p.nBot}-${p.main}：${barInfo(p.main)}｜箍筋 ${p.tie}：${barInfo(p.tie)}`;
       for (const z of spreadBars(p.nTop, bw))
         gs.push(barPolyline([ P(-hL-0.35, yTop+0.35, z), P(-hL-0.35, yTop, z), P(hL+0.35, yTop, z), P(hL+0.35, yTop+0.35, z) ], db/2));
       for (const z of spreadBars(p.nBot, bw))
@@ -518,7 +542,8 @@ CATS['鋼筋'] = [
   { id:'bar', name:'直筋', unit:'單支', note:'CNS 560，定尺 9 m / 12 m',
     p:{ bar:{label:'號數',opts:BAROPTS,def:'#6'},
         len:{label:'長度 (m)',min:0.5,max:6,step:0.1,def:2.0} },
-    build:p => barPolyline([P(-p.len/2,0), P(p.len/2,0)], REBAR[p.bar]/2000) },
+    build:p => { p.__spec = barInfo(p.bar);
+      return barPolyline([P(-p.len/2,0), P(p.len/2,0)], REBAR[p.bar]/2000); } },
 
   { id:'stirrup', name:'方箍（閉合箍筋）', unit:'柱箍筋', note:'閉合箍 + 135° 彎鉤，鉤長 6d；90° 與 135° 交替排置',
     p:{ bar:{label:'號數',opts:['#3','#4'],def:'#3'},
