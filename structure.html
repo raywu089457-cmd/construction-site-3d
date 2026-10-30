@@ -233,6 +233,31 @@ function couplerGeo(db, y, x, z) {
 
 const SPLICE_OPTS = ['續接器', '搭接'];
 
+/* RC10 表1 機械式續接性能合格標準（第 1~3 類 = B / A / SA 級） */
+const COUPLER_GRADE = {
+  'SA級': { cls:'第三類', tensile:'≥1.25fy 且 ≥fu', slip1c:'≤0.3 mm',
+            elong:'D32以下 ≥9%、D36以上 ≥6%', repeat:'不適用',
+            cyclic:'≥1.25fy 且 ≥fu；δs16c≤0.3、δs24c≤0.9、δs32c≤1.8 mm',
+            sample:'單向拉伸 1/100、高塑性反覆載 1/1000', color:0x8f9aa6 },
+  'A級':  { cls:'第二類', tensile:'≥1.25fy 且 ≥fu', slip1c:'≤0.3 mm',
+            elong:'≥4%', repeat:'不適用',
+            cyclic:'≥1.25fy 且 ≥fu；δs16c≤0.3、δs24c≤0.9 mm',
+            sample:'單向拉伸 1/100、高塑性反覆載 1/1000', color:0xa6b0bb },
+  'B級':  { cls:'第一類', tensile:'≥1.25fy', slip1c:'≤0.3 mm',
+            elong:'≥2%', repeat:'≥1.25fy；滑動量 ≤0.3 mm；伸長率 ≥2%',
+            cyclic:'不適用',
+            sample:'單向拉伸 1/100、重複載及滑動 1/1000', color:0xc2c9d0 },
+};
+/* 依鋼筋等級換算 1.25fy（kgf/cm²） */
+const STEEL_FY = { SD280: 2800, SD420: 4200, SD490: 4900, SD550: 5500 };
+function couplerSpec(p) {
+  const g = COUPLER_GRADE[p.grade] || COUPLER_GRADE['A級'];
+  const fy = STEEL_FY[p.fy] || 4200;
+  const need = Math.round(1.25 * fy);
+  const big = p.bar === '#7' || p.bar === '#8';
+  return { g, need, big };
+}
+
 function buildColBody(p, gs, opts = {}) {
   const cov = p.cover, db = REBAR[p.main] / 1000, ds = REBAR[p.tie] / 1000;
   const bx = p.b - cov * 2, hz = p.h - cov * 2, H = p.Hn;
@@ -259,14 +284,17 @@ function buildColBody(p, gs, opts = {}) {
 CATS['續接'] = [
   { id:'coupler', name:'鋼筋續接器（單一接頭）', unit:'RC10', note:'套筒長 3.5db、外徑 1.8db；兩端車牙對接；中心距 ≥3db、錯接 ≥60cm、淨保護層 ≥2db',
     p:{ bar:{label:'鋼筋號數',opts:BAROPTS,def:'#7'},
+        fy:{label:'鋼筋等級',opts:['SD280','SD420','SD490','SD550'],def:'SD420'},
+        grade:{label:'續接器等級',opts:['SA級','A級','B級'],def:'SA級'},
         gap:{label:'錯接距離 (m)',min:0,max:1.2,step:0.1,def:0.6} },
     build:p => {
       const db = REBAR[p.bar]/1000, gs=[];
+      const { g, need, big } = couplerSpec(p);
+      p.__color = g.color; p.__spec = `${g.cls}｜抗拉 ${g.tensile}（1.25fy = ${need} kgf/cm²）｜伸長率 ${g.elong}｜取樣 ${g.sample}`;
       // 垂直鋼筋：下段 + 套筒 + 上段（續接器在 y=0）
       gs.push(tube(db/2, 1.2, 0, -0.6, 0));
       gs.push(tube(db/2, 1.2, 0,  0.6, 0));
       gs.push(...couplerGeo(db, 0, 0, 0));
-      // 旁邊再一支錯開 p.gap 的（示範錯接）
       gs.push(tube(db/2, 1.2, 0.35, p.gap - 0.6, 0));
       gs.push(tube(db/2, 1.2, 0.35, p.gap + 0.6, 0));
       gs.push(...couplerGeo(db, p.gap, 0.35, 0));
@@ -275,9 +303,14 @@ CATS['續接'] = [
 
   { id:'coupler-sect', name:'續接器剖面（錯接示意）', unit:'RC10', note:'同一斷面隔根續接，相鄰續接器中心距 ≥3db；錯接 ≥60cm',
     p:{ bar:{label:'鋼筋號數',opts:BAROPTS,def:'#7'},
+        fy:{label:'鋼筋等級',opts:['SD280','SD420','SD490','SD550'],def:'SD420'},
+        grade:{label:'續接器等級',opts:['SA級','A級','B級'],def:'SA級'},
         n:{label:'每排支數',min:2,max:6,step:1,def:4} },
     build:p => {
       const db = REBAR[p.bar]/1000, gs=[];
+      const { g, need } = couplerSpec(p);
+      p.__color = g.color;
+      p.__spec = `${g.cls}｜中心距 ≥3db（圍束處 2.5db）｜1.25fy = ${need} kgf/cm²`;
       const step = 0.25;
       for (let i=0;i<p.n;i++) {
         const z = -step*(p.n-1)/2 + i*step;
@@ -861,10 +894,14 @@ function rebuild() {
     const c = group.children.pop();
     c.geometry?.dispose();
   }
+  vals.__spec = ''; vals.__color = 0;
   let geo;
   try { geo = def.build(vals); } catch (e) { console.error(e); return; }
   if (!geo) return;
-  const mat = state.cat === '鋼筋' ? MAT.rebar()
+  document.getElementById('spec').textContent =
+    (def.note || '') + (vals.__spec ? '　▸ ' + vals.__spec : '');
+  const mat = vals.__color ? plainMetal(vals.__color, 0.9, 0.35)
+            : state.cat === '鋼筋' ? MAT.rebar()
             : state.cat === '模板' ? (def.id === 'ply' ? MAT.ply()
               : def.id === 'batten' || def.id === 'sole' ? MAT.timber()
               : def.id === 'plank' || def.id === 'toe' ? MAT.galv() : MAT.steel())
