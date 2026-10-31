@@ -40,13 +40,15 @@
   #bbsbtn{position:fixed;right:14px;top:14px;z-index:20;background:#16202e;border:1px solid #1f6feb;
     color:#cfe0ff;border-radius:8px;padding:7px 13px;font-size:11.5px;font-weight:600;cursor:pointer}
   #bbsbtn:hover{background:#1b2a3d}
-  #bbs{position:fixed;right:14px;top:52px;z-index:20;width:330px;max-height:min(76vh,660px);overflow:auto;
+  #bbs{position:fixed;right:14px;top:52px;z-index:20;width:400px;max-height:min(76vh,660px);overflow:auto;
     background:#0f1216f2;border:1px solid #232a34;border-radius:10px;padding:12px 13px;display:none;
     box-shadow:0 14px 40px #0009}
   #bbs.on{display:block}
   #bbs h3{margin:0 0 2px;font-size:13px;color:#e8eaed}
   #bbs .e{font-size:10.5px;color:#6f7a86;margin-bottom:9px;line-height:1.5}
   #bbs table{width:100%;border-collapse:collapse;font-size:11px}
+  #bbs td.ic{padding:2px 2px 2px 0;width:36px}
+  #bbs td.ic svg{display:block}
   #bbs th{text-align:left;color:#8b929c;font-weight:500;padding:4px 3px;border-bottom:1px solid #232a34}
   #bbs td{padding:4px 3px;border-bottom:1px solid #1a1f26;color:#c7ccd4;font-variant-numeric:tabular-nums}
   #bbs tr.t td{color:#e8eaed;font-weight:600;border-bottom:none;padding-top:7px}
@@ -325,10 +327,27 @@ function couplerGeo(db, y, x, z) {
 
 const SPLICE_OPTS = ['續接器', '搭接'];
 
-/* ===== 鋼筋下料單（BBS）：模擬現場料單格式 #8-540=5 / #4<95x95>=18 ===== */
-function bbs(p, grade, shape, lenCm, qty, note = '') {
+/* ===== 鋼筋下料單（BBS）：比照現場料單格式 #8-540=5 / #4<95x95>=18 =====
+   形狀代號沿用彎折形狀圖：直筋、一端彎、兩端彎、閉合箍、繫筋            */
+const SHAPE_DEF = {
+  straight: { label:'直筋',        svg:'M3 14H29' },
+  bent1:    { label:'直筋·一端90°', svg:'M3 17H26V5' },
+  bent2:    { label:'直筋·兩端90°', svg:'M4 5V17H28V5' },
+  ubar:     { label:'ㄇ形筋',      svg:'M4 5V17H28V5' },
+  closed:   { label:'閉合箍',      svg:'M13 6H27V17H5V6H17 M17 6V10 M5 17V13' },
+  tie:      { label:'繫筋',        svg:'M3 6L7 13H25L29 6' },
+  straight2:{ label:'雙排直筋',    svg:'M3 10H29 M3 18H29' },
+};
+const shapeSVG = (code) => {
+  const d = SHAPE_DEF[code] || SHAPE_DEF.straight;
+  return `<svg viewBox="0 0 32 22" width="34" height="23" fill="none"
+    stroke="#6fb1ff" stroke-width="1.7" stroke-linecap="round"
+    stroke-linejoin="round"><path d="${d.svg}"/></svg>`;
+};
+
+function bbs(p, grade, code, lenCm, qty, note = '') {
   if (!Number.isFinite(lenCm) || qty <= 0) return;
-  (p.__bbs || (p.__bbs = [])).push({ grade, shape, lenCm: Math.round(lenCm), qty, note });
+  (p.__bbs || (p.__bbs = [])).push({ grade, code, lenCm: Math.round(lenCm), qty, note });
 }
 function bbsTable(p) {
   const el = document.getElementById('bbs');
@@ -343,16 +362,18 @@ function bbsTable(p) {
     const kg = r.lenCm / 100 * (REBAR_INFO[r.grade]?.kg ?? 0) * r.qty;
     tot += kg;
     byGrade[r.grade] = (byGrade[r.grade] || 0) + kg;
-    const spec = r.shape === '箍筋' || r.shape === '繫筋'
+    const cut = r.code === 'closed' || r.code === 'tie'
       ? `${r.grade}&lt;${r.lenCm}&gt;=${r.qty}`
       : `${r.grade}-${r.lenCm}=${r.qty}`;
-    html += `<tr><td>${r.shape}</td><td class="k">${spec}</td><td>${r.note || ''}</td><td>${kg.toFixed(1)}</td></tr>`;
+    html += `<tr><td class="ic">${shapeSVG(r.code)}</td>
+      <td>${(SHAPE_DEF[r.code]||SHAPE_DEF.straight).label}</td>
+      <td class="k">${cut}</td><td>${r.note || ''}</td><td>${kg.toFixed(1)}</td></tr>`;
   }
   const sum = Object.entries(byGrade).map(([g, w]) => `${g} ${w.toFixed(1)}`).join('　');
   el.innerHTML = `<h3>鋼筋下料單</h3>
-    <div class="e">依 CNS 560 標稱尺寸與標準彎鉤計算；長度單位 cm、重量 kg。<br>${sum}</div>
-    <table><tr><th>形狀</th><th>規格-下料長</th><th>備註</th><th>重量</th></tr>
-    ${html}<tr class="t"><td colspan="2">合計</td><td colspan="2">${tot.toFixed(1)} kg</td></tr></table>`;
+    <div class="e">依 CNS 560 標稱尺寸與標準彎鉤（施工規範 03210 表1/表2）計算；長度 cm、重量 kg。<br>${sum}</div>
+    <table><tr><th>形狀</th><th>名稱</th><th>規格-下料長</th><th>備註</th><th>重量</th></tr>
+    ${html}<tr class="t"><td colspan="4">合計</td><td>${tot.toFixed(1)} kg</td></tr></table>`;
 }
 
 /* ===== 標準彎鉤延伸長度（經濟部水利署施工規範 03210 表1/表2）=====
@@ -532,12 +553,12 @@ CATS['鋼筋'] = [
         const n = p.nMain, nA = Math.ceil(n/2), nB = n - nA;
         const emb = 0.40;                       // 錨定插入樑/版 40cm
         if (p.splice === '續接器') {
-          bbs(p, p.main, '直筋', (H + emb) * 100, nA, '公(續接器)');
-          bbs(p, p.main, '直筋', (H + emb + 0.60) * 100, nB, '母(續接器·錯開60)');
+          bbs(p, p.main, 'straight', (H + emb) * 100, nA, '公(續接器)');
+          bbs(p, p.main, 'straight', (H + emb + 0.60) * 100, nB, '母(續接器·錯開60)');
         } else {
           const lap = Math.max(25 * db, 0.60);
-          bbs(p, p.main, '直筋', (H + emb) * 100, nA, '受拉搭接');
-          bbs(p, p.main, '直筋', (H + emb + lap) * 100, nB, `搭接錯開${Math.round(lap*100)}`);
+          bbs(p, p.main, 'straight', (H + emb) * 100, nA, '受拉搭接');
+          bbs(p, p.main, 'straight', (H + emb + lap) * 100, nB, `搭接錯開${Math.round(lap*100)}`);
         }
       }
       const Lo = Math.min(Math.max(H/6, Math.max(p.b,p.h), 0.45), H/2);
@@ -556,10 +577,10 @@ CATS['鋼筋'] = [
       const needX = bx > 0.20, needZ = hz > 0.20;
       // 下料單：閉合箍 = 周長 + 135°+90° 兩支彎鉤
       const tieLen = (2*(bx+hz) + hook + hook90) * 100;
-      bbs(p, p.tie, '箍筋', tieLen, ys.length, `${Math.round(bx*100)}x${Math.round(hz*100)}`);
+      bbs(p, p.tie, 'closed', tieLen, ys.length, `${Math.round(bx*100)}x${Math.round(hz*100)}`);
       if (needX || needZ) {
         const ctLen = (hz + 2*hook) * 100;
-        bbs(p, p.tie, '繫筋', ctLen, ys.length * ((needX?1:0)+(needZ?1:0)), '每道箍筋處');
+        bbs(p, p.tie, 'tie', ctLen, ys.length * ((needX?1:0)+(needZ?1:0)), '每道箍筋處');
       }
       ys.sort((q,w)=>q-w).forEach((y, idx) => {
         gs.push(barPolyline([
@@ -612,14 +633,14 @@ CATS['鋼筋'] = [
       for (const z of spreadBars(p.nBot, bw))
         gs.push(barPolyline([ P(-hL-0.2, yBot, z), P(hL+0.2, yBot, z) ], db/2));
       // 下料單：上層 90° 錨定入柱、下層直通
-      bbs(p, p.main, '直筋', (L + 0.70 + 0.70) * 100, p.nTop, '上層·兩端90°錨定');
-      bbs(p, p.main, '直筋', (L + 0.40) * 100, p.nBot, '下層·直通');
+      bbs(p, p.main, 'bent2', (L + 0.70 + 0.70) * 100, p.nTop, '上層·兩端90°錨定');
+      bbs(p, p.main, 'straight', (L + 0.40) * 100, p.nBot, '下層·直通');
       // RC04：有效梁深 d > 90cm 時，梁腹兩側加梁腰筋 ≧2-#4
       const dEff = p.h - cov - db/2;
       if (p.web === '自動' && dEff > 0.90) {
         for (const z of [-bw/2, bw/2])
           gs.push(barPolyline([ P(-hL, p.h*0.5, z), P(hL, p.h*0.5, z) ], REBAR['#4']/2000));
-        bbs(p, '#4', '直筋', L * 100, 2, '梁腰筋 2-#4');
+        bbs(p, '#4', 'straight', L * 100, 2, '梁腰筋 2-#4');
       }
       // 附註7：梁端 2h 範圍內閉合箍間距不得超過 15cm
       const S1 = Math.min(p.s1/100, 0.15), S2 = p.s2/100, zone = 2*p.h;
@@ -650,7 +671,7 @@ CATS['鋼筋'] = [
         }
       });
       // 下料單：閉合箍（一邊 135°、一邊 90°）
-      bbs(p, p.tie, '箍筋', (2*(bw + p.h - 2*cov) + hook + hook90) * 100, xs.length,
+      bbs(p, p.tie, 'closed', (2*(bw + p.h - 2*cov) + hook + hook90) * 100, xs.length,
           `${Math.round((bw)*100)}x${Math.round((p.h-2*cov)*100)}`);
       // 綁紮鐵絲：箍筋與上/下層主筋交叉處
       if (p.wire === '畫') {
@@ -698,9 +719,9 @@ CATS['鋼筋'] = [
       // 下料單：下層雙向、上層支承處（含彎鉤）
       const nBx = Math.floor((W - 2*cov) / sb) + 1, nBz = Math.floor((L - 2*cov) / sb) + 1;
       const nTx = 2 * (Math.floor((W - 2*cov) / st) + 1);
-      bbs(p, p.bar, '直筋', (L - 2*cov) * 100, nBx, '下層 X 向');
-      bbs(p, p.bar, '直筋', (W - 2*cov) * 100, nBz, '下層 Z 向');
-      bbs(p, p.bar, '直筋', (ext + hookLen(p.bar, 90)) * 100, nTx, '上層 0.25L');
+      bbs(p, p.bar, 'straight', (L - 2*cov) * 100, nBx, '下層 X 向');
+      bbs(p, p.bar, 'straight', (W - 2*cov) * 100, nBz, '下層 Z 向');
+      bbs(p, p.bar, 'bent1', (ext + hookLen(p.bar, 90)) * 100, nTx, '上層 0.25L');
       // 綁紮鐵絲：每隔幾格交叉點綁一支（實務上是跳接）
       if (p.wire === '畫') {
         let k = 0;
