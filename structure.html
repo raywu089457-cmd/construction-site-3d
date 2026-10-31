@@ -458,7 +458,7 @@ CATS['鋼筋'] = [
         s1:{label:'圍束區 @ (cm)',min:7.5,max:15,step:2.5,def:12.5},
         s2:{label:'中央區 @ (cm)',min:10,max:20,step:2.5,def:15},
         splice:{label:'續接方式',opts:['續接器','搭接'],def:'續接器'},
-        wire:{label:'綁紮鐵絲',opts:['畫','不畫'],def:'畫'},
+        wire:{label:'綁紮鐵絲',opts:['不畫','畫'],def:'不畫'},
         cover:{label:'保護層 (m)',min:0.03,max:0.06,step:0.005,def:0.04} },
     build:p => {
       const cov=p.cover, db=REBAR[p.main]/1000, ds=REBAR[p.tie]/1000;
@@ -517,7 +517,7 @@ CATS['鋼筋'] = [
         s2:{label:'中央 S2 @ (cm)',min:10,max:25,step:2.5,def:15},
         web:{label:'腰筋',opts:['自動','無'],def:'自動'},
         edge:{label:'樑位',opts:['內跨','外周邊'],def:'內跨'},
-        wire:{label:'綁紮鐵絲',opts:['畫','不畫'],def:'畫'},
+        wire:{label:'綁紮鐵絲',opts:['不畫','畫'],def:'不畫'},
         cover:{label:'保護層 (m)',min:0.03,max:0.06,step:0.005,def:0.04} },
     build:p => {
       const cov=p.cover, db=REBAR[p.main]/1000, ds=REBAR[p.tie]/1000;
@@ -585,7 +585,7 @@ CATS['鋼筋'] = [
         spBot:{label:'下層 @ (cm)',min:10,max:25,step:1,def:15},
         spTop:{label:'上層 @ (cm)',min:10,max:25,step:1,def:15},
         extRatio:{label:'上層延伸 (/L)',min:0.15,max:0.4,step:0.05,def:0.25},
-        wire:{label:'綁紮鐵絲',opts:['畫','不畫'],def:'畫'},
+        wire:{label:'綁紮鐵絲',opts:['不畫','畫'],def:'不畫'},
         cover:{label:'保護層 (m)',min:0.015,max:0.04,step:0.005,def:0.02} },
     build:p => {
       const r=REBAR[p.bar]/2000, cov=p.cover, L=p.L, W=p.W, t=p.t;
